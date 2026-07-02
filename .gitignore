@@ -1,0 +1,47 @@
+# Archivos del sistema
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Archivos de configuración local
+.env
+.env.local
+.env.production
+
+# Archivos de API Keys (NUNCA subir)
+*.key
+*.secret
+*.pem
+config.json
+
+# Node modules (si usas npm en el futuro)
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Archivos de build
+dist/
+build/
+*.min.js
+*.min.css
+
+# Logs
+logs
+*.log
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Archivos temporales
+*.tmp
+*.temp
+.cache/
+
+# Archivos de backup
+*.bak
+*.backup
