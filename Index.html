@@ -1,0 +1,1538 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>🎯 R-C-T-E-E Pro Dashboard v3.1</title>
+  <style>
+    :root {
+      --bg-primary: #0f172a;
+      --bg-secondary: #1e293b;
+      --bg-tertiary: #334155;
+      --accent: #3b82f6;
+      --accent-hover: #2563eb;
+      --text-primary: #f1f5f9;
+      --text-secondary: #94a3b8;
+      --success: #10b981;
+      --warning: #f59e0b;
+      --danger: #ef4444;
+      --border: #475569;
+      --sidebar-width: 260px;
+    }
+    
+    * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Segoe UI', system-ui, sans-serif; }
+    
+    body {
+      background: var(--bg-primary);
+      color: var(--text-primary);
+      display: flex;
+      min-height: 100vh;
+    }
+    
+    .sidebar {
+      width: var(--sidebar-width);
+      background: var(--bg-secondary);
+      border-right: 1px solid var(--border);
+      position: fixed;
+      height: 100vh;
+      overflow-y: auto;
+      padding: 1.5rem 0;
+    }
+    
+    .sidebar-header {
+      padding: 0 1.5rem 1.5rem;
+      border-bottom: 1px solid var(--border);
+      margin-bottom: 1rem;
+    }
+    
+    .sidebar-header h1 { font-size: 1.3rem; margin-bottom: 0.3rem; }
+    .sidebar-header p { font-size: 0.8rem; color: var(--text-secondary); }
+    
+    .nav-section { padding: 0 1rem; margin-bottom: 1rem; }
+    .nav-section-title {
+      font-size: 0.75rem;
+      color: var(--text-secondary);
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      margin-bottom: 0.5rem;
+      padding: 0 0.5rem;
+    }
+    
+    .nav-item {
+      display: flex;
+      align-items: center;
+      gap: 0.8rem;
+      padding: 0.8rem 1rem;
+      border-radius: 8px;
+      cursor: pointer;
+      transition: all 0.2s;
+      margin-bottom: 0.3rem;
+      font-size: 0.9rem;
+    }
+    
+    .nav-item:hover { background: var(--bg-tertiary); }
+    .nav-item.active { background: var(--accent); color: white; }
+    .nav-item .icon { font-size: 1.2rem; }
+    .nav-item .badge {
+      margin-left: auto;
+      background: var(--success);
+      color: white;
+      padding: 0.2rem 0.5rem;
+      border-radius: 12px;
+      font-size: 0.7rem;
+    }
+    
+    .main-content {
+      margin-left: var(--sidebar-width);
+      flex: 1;
+      padding: 2rem;
+    }
+    
+    .header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 2rem;
+      padding-bottom: 1rem;
+      border-bottom: 1px solid var(--border);
+    }
+    
+    .header h2 { font-size: 1.8rem; }
+    .header-actions { display: flex; gap: 1rem; align-items: center; }
+    
+    .api-status {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      font-size: 0.85rem;
+      color: var(--success);
+    }
+    
+    .api-status .dot {
+      width: 8px;
+      height: 8px;
+      background: var(--success);
+      border-radius: 50%;
+      animation: pulse 2s infinite;
+    }
+    
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.5; }
+    }
+    
+    .metrics-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 1rem;
+      margin-bottom: 2rem;
+    }
+    
+    .metric-card {
+      background: var(--bg-secondary);
+      padding: 1.5rem;
+      border-radius: 12px;
+      border: 1px solid var(--border);
+    }
+    
+    .metric-card .label { font-size: 0.85rem; color: var(--text-secondary); margin-bottom: 0.5rem; }
+    .metric-card .value { font-size: 2rem; font-weight: 700; margin-bottom: 0.3rem; }
+    .metric-card .change { font-size: 0.8rem; color: var(--success); }
+    
+    .content-section { display: none; }
+    .content-section.active { display: block; }
+    
+    .card {
+      background: var(--bg-secondary);
+      border-radius: 12px;
+      padding: 1.5rem;
+      margin-bottom: 1.5rem;
+      border: 1px solid var(--border);
+    }
+    
+    .card-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 1rem;
+      padding-bottom: 0.8rem;
+      border-bottom: 1px solid var(--border);
+    }
+    
+    .card-header h3 { font-size: 1.2rem; }
+    
+    .form-group { margin-bottom: 1.2rem; position: relative; }
+    .form-group label { display: block; margin-bottom: 0.5rem; font-weight: 600; font-size: 0.9rem; }
+    
+    .form-control {
+      width: 100%;
+      padding: 0.8rem;
+      background: var(--bg-primary);
+      border: 1px solid var(--border);
+      color: var(--text-primary);
+      border-radius: 8px;
+      font-size: 0.95rem;
+    }
+    
+    .form-control:focus { outline: 2px solid var(--accent); border-color: transparent; }
+    textarea.form-control { resize: vertical; min-height: 80px; font-family: monospace; }
+    
+    .btn {
+      background: var(--accent);
+      color: white;
+      border: none;
+      padding: 0.9rem 1.5rem;
+      border-radius: 8px;
+      font-size: 1rem;
+      cursor: pointer;
+      font-weight: 600;
+      transition: all 0.2s;
+      display: inline-flex;
+      align-items: center;
+      gap: 0.5rem;
+    }
+    
+    .btn:hover { background: var(--accent-hover); transform: translateY(-1px); }
+    .btn:disabled { opacity: 0.5; cursor: not-allowed; }
+    .btn-success { background: var(--success); }
+    .btn-warning { background: var(--warning); color: #0f172a; }
+    .btn-secondary { background: var(--bg-tertiary); }
+    
+    .grid-2 { display: grid; grid-template-columns: repeat(2, 1fr); gap: 1rem; }
+    .grid-3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1rem; }
+    .grid-4 { display: grid; grid-template-columns: repeat(4, 1fr); gap: 1rem; }
+    
+    .char-counter {
+      position: absolute;
+      top: 2rem;
+      right: 0.5rem;
+      font-size: 0.75rem;
+      padding: 0.2rem 0.5rem;
+      border-radius: 4px;
+      background: var(--bg-tertiary);
+    }
+    
+    .char-counter.ok { background: var(--success); color: white; }
+    .char-counter.bad { background: var(--danger); color: white; }
+    
+    .form-control.valido { border-color: var(--success); }
+    .form-control.invalido { border-color: var(--danger); }
+    
+    .chat-container {
+      background: var(--bg-primary);
+      border-radius: 12px;
+      padding: 1rem;
+      height: 500px;
+      display: flex;
+      flex-direction: column;
+      border: 1px solid var(--border);
+    }
+    
+    .chat-messages {
+      flex: 1;
+      overflow-y: auto;
+      padding: 1rem;
+      background: var(--bg-secondary);
+      border-radius: 8px;
+      margin-bottom: 1rem;
+    }
+    
+    .chat-message { margin-bottom: 1rem; display: flex; gap: 0.5rem; }
+    .chat-message.user { justify-content: flex-end; }
+    
+    .chat-bubble {
+      max-width: 75%;
+      padding: 0.8rem 1rem;
+      border-radius: 12px;
+      white-space: pre-wrap;
+      word-wrap: break-word;
+    }
+    
+    .chat-message.user .chat-bubble {
+      background: var(--accent);
+      color: white;
+      border-bottom-right-radius: 4px;
+    }
+    
+    .chat-message.ai .chat-bubble {
+      background: var(--bg-tertiary);
+      color: var(--text-primary);
+      border-bottom-left-radius: 4px;
+    }
+    
+    .chat-input-area { display: flex; gap: 0.5rem; }
+    .chat-input-area textarea { flex: 1; min-height: 50px; resize: none; }
+    
+    .personality-chips { display: flex; gap: 0.5rem; flex-wrap: wrap; margin-bottom: 1rem; }
+    
+    .personality-chip {
+      padding: 0.5rem 1rem;
+      background: var(--bg-tertiary);
+      border: 1px solid var(--border);
+      border-radius: 20px;
+      cursor: pointer;
+      font-size: 0.85rem;
+      transition: all 0.2s;
+    }
+    
+    .personality-chip.active { background: var(--accent); border-color: var(--accent); color: white; }
+    .personality-chip:hover { border-color: var(--accent); }
+    
+    .template-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+      gap: 1rem;
+    }
+    
+    .template-card {
+      background: var(--bg-primary);
+      padding: 1rem;
+      border-radius: 8px;
+      border: 1px solid var(--border);
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    
+    .template-card:hover { border-color: var(--accent); transform: translateY(-2px); }
+    .template-card .tag {
+      display: inline-block;
+      padding: 0.2rem 0.5rem;
+      border-radius: 4px;
+      font-size: 0.75rem;
+      margin-bottom: 0.5rem;
+    }
+    
+    .output-area {
+      background: var(--bg-primary);
+      padding: 1.5rem;
+      border-radius: 12px;
+      border: 1px solid var(--border);
+      font-family: monospace;
+      white-space: pre-wrap;
+      max-height: 500px;
+      overflow-y: auto;
+      display: none;
+    }
+    
+    .compliance-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 0.8rem;
+      margin: 1rem 0;
+    }
+    
+    .compliance-item {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      background: var(--bg-primary);
+      padding: 0.8rem;
+      border-radius: 8px;
+      border: 1px solid var(--border);
+    }
+    
+    .compliance-item input { width: auto; }
+    
+    .actions { display: flex; gap: 0.8rem; margin-top: 1rem; flex-wrap: wrap; }
+    .actions button { flex: 1; min-width: 120px; padding: 0.7rem; background: var(--success); color: white; border: none; border-radius: 8px; cursor: pointer; font-weight: 500; }
+    
+    .history-item { padding: 0.8rem; border-bottom: 1px solid var(--border); cursor: pointer; transition: 0.2s; }
+    .history-item:hover { background: var(--bg-tertiary); }
+    
+    @media (max-width: 768px) {
+      .sidebar { width: 100%; position: relative; height: auto; }
+      .main-content { margin-left: 0; }
+      body { flex-direction: column; }
+      .grid-2, .grid-3, .grid-4 { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+  <!-- SIDEBAR -->
+  <div class="sidebar">
+    <div class="sidebar-header">
+      <h1>🎯 R-C-T-E-E Pro</h1>
+      <p>Dashboard v3.1</p>
+    </div>
+    
+    <div class="nav-section">
+      <div class="nav-section-title">Principal</div>
+      <div class="nav-item active" onclick="switchSection('dashboard', this)">
+        <span class="icon">📊</span>
+        <span>Dashboard</span>
+      </div>
+      <div class="nav-item" onclick="switchSection('clasico', this)">
+        <span class="icon">📋</span>
+        <span>Clásico</span>
+        <span class="badge">21</span>
+      </div>
+      <div class="nav-item" onclick="switchSection('enterprise', this)">
+        <span class="icon">🏢</span>
+        <span>Enterprise</span>
+      </div>
+    </div>
+    
+    <div class="nav-section">
+      <div class="nav-section-title">Plantillas</div>
+      <div class="nav-item" onclick="switchSection('templates', this)">
+        <span class="icon"></span>
+        <span>Empresas</span>
+        <span class="badge">7×3</span>
+      </div>
+      <div class="nav-item" onclick="switchSection('rentables', this)">
+        <span class="icon">💰</span>
+        <span>Alta Rentabilidad</span>
+        <span class="badge">12</span>
+      </div>
+      <div class="nav-item" onclick="switchSection('mercado', this)">
+        <span class="icon">🚀</span>
+        <span>Actividades Mercado</span>
+        <span class="badge">30+</span>
+      </div>
+    </div>
+    
+    <div class="nav-section">
+      <div class="nav-section-title">IA</div>
+      <div class="nav-item" onclick="switchSection('chatbot', this)">
+        <span class="icon"></span>
+        <span>Chatbot IA</span>
+        <span class="badge">8</span>
+      </div>
+    </div>
+    
+    <div class="nav-section">
+      <div class="nav-section-title">Configuración</div>
+      <div class="nav-item" onclick="switchSection('settings', this)">
+        <span class="icon">⚙️</span>
+        <span>Ajustes</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- MAIN CONTENT -->
+  <div class="main-content">
+    <div class="header">
+      <h2 id="sectionTitle">Dashboard</h2>
+      <div class="header-actions">
+        <div class="api-status" id="apiStatus" style="display:none;">
+          <span class="dot"></span>
+          <span>API Conectada</span>
+        </div>
+        <button class="btn btn-secondary" onclick="toggleLocalMode()" id="modeBtn">
+          ️ Modo Local
+        </button>
+      </div>
+    </div>
+
+    <!-- DASHBOARD -->
+    <div id="section-dashboard" class="content-section active">
+      <div class="metrics-grid">
+        <div class="metric-card">
+          <div class="label">Plantillas Empresas</div>
+          <div class="value">21</div>
+          <div class="change">3 por empresa</div>
+        </div>
+        <div class="metric-card">
+          <div class="label">Empresas Activas</div>
+          <div class="value">7</div>
+          <div class="change">Todas operativas</div>
+        </div>
+        <div class="metric-card">
+          <div class="label">Personalidades IA</div>
+          <div class="value">8</div>
+          <div class="change">Chatbot activo</div>
+        </div>
+        <div class="metric-card">
+          <div class="label">Prompts Generados</div>
+          <div class="value" id="metricPrompts">0</div>
+          <div class="change">En esta sesión</div>
+        </div>
+      </div>
+
+      <div class="grid-2">
+        <div class="card">
+          <div class="card-header"><h3> Acceso Rápido</h3></div>
+          <div style="display: flex; flex-direction: column; gap: 0.8rem;">
+            <button class="btn" onclick="switchSection('clasico', null)">📋 Generar Prompt Clásico</button>
+            <button class="btn btn-success" onclick="switchSection('enterprise', null)">🏢 Generar Prompt Enterprise</button>
+            <button class="btn btn-warning" onclick="switchSection('chatbot', null)">🤖 Abrir Chatbot IA</button>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-header"><h3> Estadísticas de Uso</h3></div>
+          <div style="display: flex; flex-direction: column; gap: 1rem;">
+            <div>
+              <div style="display: flex; justify-content: space-between; margin-bottom: 0.3rem;">
+                <span>Plantillas Empresas</span><span>21/21</span>
+              </div>
+              <div style="background: var(--bg-primary); height: 8px; border-radius: 4px; overflow: hidden;">
+                <div style="background: var(--success); width: 100%; height: 100%;"></div>
+              </div>
+            </div>
+            <div>
+              <div style="display: flex; justify-content: space-between; margin-bottom: 0.3rem;">
+                <span>Plantillas Rentables</span><span>12/12</span>
+              </div>
+              <div style="background: var(--bg-primary); height: 8px; border-radius: 4px; overflow: hidden;">
+                <div style="background: var(--success); width: 100%; height: 100%;"></div>
+              </div>
+            </div>
+            <div>
+              <div style="display: flex; justify-content: space-between; margin-bottom: 0.3rem;">
+                <span>Plantillas Mercado</span><span>30/30</span>
+              </div>
+              <div style="background: var(--bg-primary); height: 8px; border-radius: 4px; overflow: hidden;">
+                <div style="background: var(--success); width: 100%; height: 100%;"></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-header"><h3>🏢 Empresas de tu Matriz</h3></div>
+        <div class="grid-4" id="dashboardEmpresas"></div>
+      </div>
+    </div>
+
+    <!-- CLÁSICO -->
+    <div id="section-clasico" class="content-section">
+      <div class="card">
+        <div class="card-header"><h3>📋 Generador de Prompts Clásico</h3></div>
+        
+        <div class="grid-3">
+          <div class="form-group">
+            <label>🏢 Empresa / Sector</label>
+            <select class="form-control" id="sectorSelect" onchange="filtrarPorSector()">
+              <option value="">-- Todas --</option>
+              <option value="reintegra_ai">💰 Reintegra AI</option>
+              <option value="kineticorp_bienestar"> Kineticorp Bienestar</option>
+              <option value="diseno_interiores">🎨 Diseño Interiores</option>
+              <option value="toondimension">🎉 Toondimension</option>
+              <option value="ecokineti"> Ecokineti</option>
+              <option value="reintegration">🏠 Reintegration</option>
+              <option value="kineticorp_ia">⚡ Kinetic Corp IA</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label>🗂️ Plantilla</label>
+            <select class="form-control" id="templateSelect"><option value="">-- Personalizado --</option></select>
+          </div>
+          <div class="form-group">
+            <label>🎭 Rol</label>
+            <select class="form-control" id="roleSelect"><option value="">-- Selecciona --</option></select>
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label>1. ROL (mín. 80 caracteres)</label>
+          <span class="char-counter" id="count-rol">0/80</span>
+          <textarea class="form-control" id="rol" rows="3" oninput="updateCounter('rol')"></textarea>
+        </div>
+        <div class="form-group">
+          <label>2. CONTEXTO (mín. 80 caracteres)</label>
+          <span class="char-counter" id="count-ctx">0/80</span>
+          <textarea class="form-control" id="ctx" rows="3" oninput="updateCounter('ctx')"></textarea>
+        </div>
+        <div class="form-group">
+          <label>3. TAREA (mín. 80 caracteres)</label>
+          <span class="char-counter" id="count-tarea">0/80</span>
+          <textarea class="form-control" id="tarea" rows="3" oninput="updateCounter('tarea')"></textarea>
+        </div>
+        <div class="form-group">
+          <label>4. ESPECIFICACIONES (mín. 80 caracteres)</label>
+          <span class="char-counter" id="count-esp">0/80</span>
+          <textarea class="form-control" id="esp" rows="3" oninput="updateCounter('esp')"></textarea>
+        </div>
+        
+        <div class="form-group">
+          <label>🚫 RESTRICCIONES NEGATIVAS</label>
+          <textarea class="form-control" id="negativas" rows="2" placeholder="Ej: No prometas quitas de deuda. No uses lenguaje amenazante."></textarea>
+        </div>
+        
+        <div class="form-group">
+          <label>5. EJEMPLOS (mín. 80 caracteres)</label>
+          <span class="char-counter" id="count-ej">0/80</span>
+          <textarea class="form-control" id="ej" rows="3" oninput="updateCounter('ej')" placeholder="Opcional pero recomendado"></textarea>
+        </div>
+
+        <div class="card" style="background: var(--bg-primary);">
+          <h4 style="margin-bottom: 1rem;">📐 Formato de Salida</h4>
+          <div class="grid-4">
+            <div class="template-card selected" onclick="selectFormato('markdown', this)" style="text-align: center;">
+              <div style="font-size: 2rem;">📝</div>
+              <div style="font-weight: 600;">Markdown</div>
+            </div>
+            <div class="template-card" onclick="selectFormato('texto', this)" style="text-align: center;">
+              <div style="font-size: 2rem;">📄</div>
+              <div style="font-weight: 600;">Texto Plano</div>
+            </div>
+            <div class="template-card" onclick="selectFormato('json', this)" style="text-align: center;">
+              <div style="font-size: 2rem;">🔧</div>
+              <div style="font-weight: 600;">JSON</div>
+            </div>
+            <div class="template-card" onclick="selectFormato('lista', this)" style="text-align: center;">
+              <div style="font-size: 2rem;">🔢</div>
+              <div style="font-weight: 600;">Lista</div>
+            </div>
+            <div class="template-card" onclick="selectFormato('tabla', this)" style="text-align: center;">
+              <div style="font-size: 2rem;">📊</div>
+              <div style="font-weight: 600;">Tabla</div>
+            </div>
+          </div>
+          <div style="margin-top: 1rem;">
+            <span style="color: var(--text-secondary);">Seleccionado: </span>
+            <span class="btn btn-success" id="formatoActual" style="padding: 0.3rem 0.8rem; font-size: 0.85rem;">📝 Markdown</span>
+          </div>
+        </div>
+
+        <h4 style="margin: 1.5rem 0 1rem;"> Controles de Precisión</h4>
+        <div class="compliance-grid">
+          <label class="compliance-item">
+            <input type="checkbox" id="modo_cot" checked>
+            <span>🧠 Modo Razonamiento (Chain of Thought)</span>
+          </label>
+          <label class="compliance-item">
+            <input type="checkbox" id="auto_verificacion" checked>
+            <span>✅ Auto-verificación</span>
+          </label>
+        </div>
+
+        <div class="grid-2">
+          <div class="form-group">
+            <label>🎨 Tono</label>
+            <select class="form-control" id="tono">
+              <option>Profesional</option>
+              <option>Creativo</option>
+              <option>Técnico</option>
+              <option>Ejecutivo</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label>📏 Detalle</label>
+            <select class="form-control" id="detalle">
+              <option>Conciso</option>
+              <option>Balanceado</option>
+              <option>Detallado</option>
+            </select>
+          </div>
+        </div>
+
+        <button class="btn" id="btn-generar-clasico" onclick="generarClasico()" style="width: 100%; margin-top: 1rem;">
+          🚀 Generar Master Prompt
+        </button>
+      </div>
+
+      <div class="output-area" id="output-clasico"></div>
+      <div class="actions" id="acciones-clasico" style="display:none; margin-top: 1rem;">
+        <button class="btn btn-success" onclick="copiar()">📋 Copiar</button>
+        <button class="btn" onclick="guardar()">💾 Guardar</button>
+        <button class="btn btn-secondary" onclick="exportarMD()">📄 Exportar .md</button>
+      </div>
+    </div>
+
+    <!-- ENTERPRISE -->
+    <div id="section-enterprise" class="content-section">
+      <div class="card">
+        <div class="card-header"><h3>🏢 Generador Enterprise Template</h3></div>
+        
+        <div class="form-group">
+          <label>🏢 Empresa</label>
+          <select class="form-control" id="ent_sector" onchange="cargarEjemplosSector()">
+            <option value="reintegra_ai">💰 Reintegra AI</option>
+            <option value="kineticorp_bienestar">🧘 Kineticorp Bienestar</option>
+            <option value="diseno_interiores">🎨 Diseño</option>
+            <option value="toondimension">🎉 Toondimension</option>
+            <option value="ecokineti">🌱 Ecokineti</option>
+            <option value="reintegration">🏠 Reintegration</option>
+            <option value="kineticorp_ia"> Kinetic IA</option>
+          </select>
+        </div>
+
+        <div class="form-group">
+          <label>🎭 [ROL] (mín. 80 caracteres)</label>
+          <span class="char-counter" id="count-ent-rol">0/80</span>
+          <textarea class="form-control" id="ent_rol" rows="3" oninput="updateCounter('ent-rol')"></textarea>
+        </div>
+        <div class="form-group">
+          <label>📋 [REGLAS]</label>
+          <textarea class="form-control" id="ent_reglas" rows="4"></textarea>
+        </div>
+        <div class="form-group">
+          <label>🚫 [RESTRICCIONES_NEGATIVAS]</label>
+          <textarea class="form-control" id="ent_negativas" rows="2"></textarea>
+        </div>
+        <div class="form-group">
+          <label>📤 [FORMATO_SALIDA]</label>
+          <textarea class="form-control" id="ent_formato" rows="4"></textarea>
+        </div>
+        
+        <h4 style="margin: 1.5rem 0 1rem;">🧠 Controles de Precisión</h4>
+        <div class="compliance-grid">
+          <label class="compliance-item">
+            <input type="checkbox" id="e_cot" checked>
+            <span>🧠 Modo Razonamiento</span>
+          </label>
+          <label class="compliance-item">
+            <input type="checkbox" id="e_verif" checked>
+            <span>✅ Auto-verificación</span>
+          </label>
+          <label class="compliance-item">
+            <input type="checkbox" id="e_json" checked>
+            <span> Validar JSON</span>
+          </label>
+        </div>
+        
+        <div class="form-group">
+          <label> TAREA</label>
+          <textarea class="form-control" id="ent_tarea" rows="3"></textarea>
+        </div>
+        
+        <button class="btn btn-success" onclick="generarEnterprise()" style="width: 100%;">
+          🏢 Generar Prompt Enterprise
+        </button>
+        
+        <div id="validationResult" style="margin-top: 1rem; padding: 1rem; border-radius: 8px; display: none;"></div>
+      </div>
+
+      <div class="output-area" id="output-enterprise"></div>
+    </div>
+
+    <!-- TEMPLATES -->
+    <div id="section-templates" class="content-section">
+      <div class="card">
+        <div class="card-header"><h3>📦 Plantillas por Empresa (3 por empresa)</h3></div>
+        <div class="grid-4" id="sectorGrid"></div>
+      </div>
+
+      <div class="card">
+        <div class="card-header"><h3>📋 Plantillas Disponibles</h3></div>
+        <div class="template-grid" id="examplesGrid"></div>
+      </div>
+    </div>
+
+    <!-- RENTABLES -->
+    <div id="section-rentables" class="content-section">
+      <div class="card">
+        <div class="card-header">
+          <h3>💰 Labores Más Rentables <span style="background: linear-gradient(135deg, #f59e0b 0%, #ef4444 100%); color: white; padding: 0.3rem 0.8rem; border-radius: 12px; font-size: 0.75rem;">TOP 2024-2025</span></h3>
+        </div>
+        
+        <div class="form-group">
+          <label>🎓 Tipo de Experto</label>
+          <select class="form-control" id="tipoExperto" onchange="filtrarRentables()">
+            <option value="">-- Todos --</option>
+            <option value="consultor">Consultor</option>
+            <option value="ingeniero">Ingeniero</option>
+            <option value="disenador">Diseñador</option>
+            <option value="master">Master/PhD</option>
+            <option value="tecnico">Técnico</option>
+            <option value="analista">Analista</option>
+            <option value="desarrollador">Desarrollador</option>
+            <option value="especialista">Especialista</option>
+          </select>
+        </div>
+
+        <div class="template-grid" id="rentablesGrid"></div>
+      </div>
+    </div>
+
+    <!-- MERCADO -->
+    <div id="section-mercado" class="content-section">
+      <div class="card">
+        <div class="card-header">
+          <h3> Actividades del Mercado <span style="background: linear-gradient(135deg, #f59e0b 0%, #ef4444 100%); color: white; padding: 0.3rem 0.8rem; border-radius: 12px; font-size: 0.75rem;">ALTA DEMANDA</span></h3>
+        </div>
+        
+        <div class="form-group">
+          <label>📂 Categoría</label>
+          <select class="form-control" id="categoriaMercado" onchange="filtrarMercado()">
+            <option value="">-- Todas las categorías --</option>
+            <option value="marketing_digital">📣 Marketing Digital</option>
+            <option value="redes_sociales">📱 Redes Sociales</option>
+            <option value="creacion_video">🎬 Creación de Video</option>
+            <option value="creacion_app">📱 Creación de Apps</option>
+            <option value="creacion_imagenes">🎨 Creación de Imágenes (IA)</option>
+            <option value="copywriting">✍️ Copywriting</option>
+            <option value="email_marketing">📧 Email Marketing</option>
+            <option value="seo_sem">🔍 SEO/SEM</option>
+            <option value="ecommerce">🛒 E-commerce</option>
+            <option value="automatizacion">⚙️ Automatización</option>
+          </select>
+        </div>
+
+        <div class="template-grid" id="mercadoGrid"></div>
+      </div>
+    </div>
+
+    <!-- CHATBOT -->
+    <div id="section-chatbot" class="content-section">
+      <div class="card">
+        <div class="card-header">
+          <h3>🤖 Chatbot IA <span style="background: linear-gradient(135deg, #f59e0b 0%, #ef4444 100%); color: white; padding: 0.3rem 0.8rem; border-radius: 12px; font-size: 0.75rem;">POWERED BY GROQ/OLLAMA</span></h3>
+        </div>
+
+        <h4 style="margin-bottom: 1rem;">🎭 Selecciona Personalidad</h4>
+        <div class="personality-chips" id="chatPersonalities">
+          <div class="personality-chip active" onclick="selectPersonality('general', this)"> Asistente General</div>
+          <div class="personality-chip" onclick="selectPersonality('cobranza', this)">💰 Experto Cobranza</div>
+          <div class="personality-chip" onclick="selectPersonality('ia', this)">⚡ Consultor IA</div>
+          <div class="personality-chip" onclick="selectPersonality('diseno', this)">🎨 Diseñador</div>
+          <div class="personality-chip" onclick="selectPersonality('marketing', this)">📣 Marketing Digital</div>
+          <div class="personality-chip" onclick="selectPersonality('programador', this)">💻 Programador Senior</div>
+          <div class="personality-chip" onclick="selectPersonality('finanzas', this)">📊 Analista Financiero</div>
+          <div class="personality-chip" onclick="selectPersonality('sostenibilidad', this)">🌱 Experto Sostenibilidad</div>
+        </div>
+
+        <div class="chat-container">
+          <div class="chat-messages" id="chatMessages">
+            <div class="chat-message ai">
+              <div class="chat-bubble">¡Hola! Soy tu asistente IA. ¿En qué puedo ayudarte hoy? Selecciona una personalidad arriba para especializar mis respuestas.</div>
+            </div>
+          </div>
+          <div class="chat-input-area">
+            <textarea class="form-control" id="chatInput" placeholder="Escribe tu mensaje aquí... (Enter para enviar, Shift+Enter para nueva línea)" onkeydown="handleChatKey(event)"></textarea>
+            <button class="btn btn-success" onclick="enviarMensaje()" style="width: auto;"> Enviar</button>
+            <button class="btn btn-secondary" onclick="limpiarChat()" style="width: auto;">🗑️ Limpiar</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- SETTINGS -->
+    <div id="section-settings" class="content-section">
+      <div class="card">
+        <div class="card-header"><h3>⚙️ Configuración</h3></div>
+        
+        <div class="form-group">
+          <label>🔑 API Key (Groq)</label>
+          <input type="password" class="form-control" id="apiKey" placeholder="gsk_..." autocomplete="off">
+        </div>
+        
+        <div style="display: flex; gap: 1rem; margin-top: 1rem; flex-wrap: wrap;">
+          <button class="btn btn-secondary" onclick="clearApiKey()">🗑️ Limpiar API Key</button>
+          <button class="btn" onclick="exportarConfig()"> Exportar Configuración</button>
+          <button class="btn btn-secondary" onclick="document.getElementById('importFile').click()">📥 Importar Configuración</button>
+          <input type="file" id="importFile" accept=".json" style="display:none" onchange="importarConfig(event)">
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-header"><h3>📜 Historial de Prompts</h3></div>
+        <div id="historialList"></div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    let ultimoPrompt = "", modoLocal = false, sectorActual = "", empresaSeleccionada = "", formatoSalidaSeleccionado = "markdown";
+    let chatHistory = [];
+    let chatPersonalityActual = "general";
+    let promptsGenerados = 0;
+
+    const CHAT_PERSONALITIES = {
+      "general": { nombre: "Asistente General", system: "Eres un asistente IA útil, preciso y amigable. Responde de forma clara y estructurada." },
+      "cobranza": { nombre: "Experto Cobranza", system: "Eres Director de Cobranza con 15 años de experiencia en recuperación de cartera morosa en LATAM." },
+      "ia": { nombre: "Consultor IA", system: "Eres Consultor Senior de IA Empresarial con experiencia en Fortune 500." },
+      "diseno": { nombre: "Diseñador", system: "Eres Diseñador de Interiores y UX/UI Senior con 12 años de experiencia." },
+      "marketing": { nombre: "Marketing Digital", system: "Eres experto en Marketing Digital con 10 años gestionando campañas." },
+      "programador": { nombre: "Programador Senior", system: "Eres Desarrollador Full Stack Senior con 10 años de experiencia." },
+      "finanzas": { nombre: "Analista Financiero", system: "Eres Analista Financiero CFA con experiencia en modelado financiero." },
+      "sostenibilidad": { nombre: "Experto Sostenibilidad", system: "Eres Consultor en Sostenibilidad Corporativa certificado en ISO 14001." }
+    };
+
+    const EMPRESAS = {
+      "reintegra_ai": { icon: "", name: "Reintegra AI", desc: "Financiero/Cobranza" },
+      "kineticorp_bienestar": { icon: "", name: "Kineticorp Bienestar", desc: "Bienestar Laboral" },
+      "diseno_interiores": { icon: "🎨", name: "Diseño Interiores", desc: "Diseño" },
+      "toondimension": { icon: "🎉", name: "Toondimension", desc: "Eventos" },
+      "ecokineti": { icon: "", name: "Ecokineti", desc: "Sostenibilidad" },
+      "reintegration": { icon: "🏠", name: "Reintegration", desc: "Inmobiliario" },
+      "kineticorp_ia": { icon: "⚡", name: "Kinetic Corp IA", desc: "IA/Software" }
+    };
+
+    const PLANTILLAS_EMPRESAS = {
+      "reintegra_ai": [
+        {
+          nombre: "📊 Diagnóstico Financiero Express",
+          rol: "Eres un asesor financiero senior especializado en PYMES con 15 años de experiencia realizando diagnósticos financieros express en 24-48 horas. Experto en análisis de liquidez, solvencia, rentabilidad y flujo de caja con metodología de semáforo financiero para presentaciones ante entidades bancarias.",
+          ctx: "Una PYME del sector comercio con 20 empleados, ingresos mensuales de $100,000 USD y deudas acumuladas de $250,000 USD necesita un diagnóstico financiero urgente para presentar ante el banco en 24 horas y solicitar reestructuración de deuda.",
+          tarea: "Realizar un diagnóstico financiero express completo que incluya análisis de ratios clave, clasificación por semáforo de colores, identificación de problemas prioritarios con impacto cuantificado y plan de acciones inmediatas para presentar ante entidad bancaria.",
+          esp: "Calcular ratios de liquidez (corriente y ácida), solvencia (deuda/patrimonio) y rentabilidad (EBITDA margen). Clasificar cada ratio en semáforo: rojo (<0.5), amarillo (0.5-0.75), verde (>0.75). Identificar máximo 3 problemas prioritarios con impacto cuantificado en dólares. Proponer 3-5 acciones inmediatas para los primeros 30 días. Formato: tabla comparativa + executive summary.",
+          ej: "Ratio liquidez corriente: 0.8 (semáforo amarillo, benchmark industria 1.5). Problema prioritario: Alto nivel de endeudamiento con ratio deuda/patrimonio de 2.5 (impacto: riesgo de insolvencia en 12 meses si no se reestructura). Acción inmediata: Renegociar deuda bancaria extendiendo plazo de 24 a 48 meses para reducir cuota mensual en 40%."
+        },
+        {
+          nombre: "📞 Consultoría Cobranza Mora 1-90 Días",
+          rol: "Eres un especialista en cobranza preventiva y temprana con 12 años de experiencia en recuperación de cartera morosa de 1 a 90 días para PYMES en sector retail y servicios. Tu enfoque combina firmeza con empatía para preservar relaciones comerciales mientras maximizas la recuperación.",
+          ctx: "Una PYME del sector retail tiene una cartera vencida de $120,000 USD distribuida en 85 clientes con diferentes tramos de mora: 40 clientes en mora 1-30 días ($30,000), 30 clientes en mora 31-60 días ($45,000) y 15 clientes en mora 61-90 días ($45,000). La tasa de contacto histórica es del 65%.",
+          tarea: "Diseñar una estrategia de cobro diferenciada por tramo de mora (1-30, 31-60, 61-90 días) que incluya guiones telefónicos de 90 segundos, templates de comunicación multi-canal (WhatsApp, email, SMS), ofertas de refinanciación escalonadas y KPIs de gestión medibles para maximizar la recuperación.",
+          esp: "Para cada tramo definir: tono de comunicación, canal prioritario, frecuencia de contacto, oferta de refinanciación aplicable. Incluir guion telefónico completo de 90 segundos por tramo con apertura, desarrollo y cierre. Diseñar 3 templates por canal (WhatsApp, email, SMS) adaptados al tono de cada tramo. Definir 3 KPIs de gestión con metas realistas basadas en la tasa de contacto histórica del 65%.",
+          ej: "Tramo 1-30 días: tono amable y recordatorio, canal prioritario WhatsApp, frecuencia semanal, oferta: plan de pagos en 3 cuotas sin intereses. Guion apertura: 'Hola [Nombre], te contactamos de [Empresa] para recordarte amablemente tu factura #12345 por $500 que venció hace 15 días. ¿Todo bien? ¿Necesitas algún apoyo con el pago?'"
+        },
+        {
+          nombre: "⚖️ Estrategia Cobranza Mora >90 Días",
+          rol: "Eres un especialista en cobranza judicial y recuperación de cartera castigada con 15 años de experiencia manejando casos complejos de mora superior a 90 días. Experto en negociación agresiva, análisis de viabilidad legal, procesos de cobranza pre-jurídica y gestión de cartera castigada con enfoque en maximizar recuperación minimizando costos legales.",
+          ctx: "Una PYME tiene cartera castigada de $80,000 USD distribuida en 30 clientes con mora superior a 90 días: 15 clientes con mora 91-180 días ($35,000), 10 clientes con mora 181-365 días ($30,000) y 5 clientes con mora mayor a 365 días ($15,000). Se necesita estrategia de recuperación agresiva.",
+          tarea: "Diseñar estrategia de recuperación agresiva para cartera con mora >90 días incluyendo segmentación por probabilidad de recuperación, guiones de cobranza pre-jurídica con tono urgente, análisis de viabilidad legal por caso, propuestas de quita con descuentos escalonados y plan de acción legal para casos de alta viabilidad.",
+          esp: "Segmentar clientes en 3 categorías: alta probabilidad de recuperación (30-40%), media probabilidad (30-40%), baja probabilidad (20-30%). Diseñar guion pre-jurídico con tono urgente mencionando consecuencias legales. Realizar análisis costo-beneficio por caso para determinar viabilidad de acción legal. Proponer esquema de quitas: 20% descuento pago inmediato, 10% descuento plan 3 meses, sin descuento plan 6 meses. Definir KPIs: tasa de recuperación por segmento, costo de recuperación, ROI del proceso.",
+          ej: "Cliente con mora 120 días, deuda $5,000: Segmento media probabilidad. Guion: 'Estimado [Nombre], su deuda de $5,000 tiene 120 días de mora. Si no regulariza en 15 días hábiles, iniciaremos proceso legal con costos adicionales de $800. Le ofrecemos 20% de descuento ($4,000) si paga hoy. ¿Procedemos?' Análisis legal: Viabilidad media, costo proceso $800, probabilidad éxito 60%."
+        }
+      ],
+      "kineticorp_bienestar": [
+        {
+          nombre: "🧘 Programa Bienestar Laboral Integral",
+          rol: "Eres un consultor senior en bienestar laboral y salud organizacional con 12 años de experiencia diseñando e implementando programas integrales de bienestar para empresas de 100 a 500 empleados. Experto en los 4 pilares del bienestar (físico, mental, social y financiero), métricas de engagement (eNPS), reducción de ausentismo y rotación, y cálculo de ROI de programas de bienestar.",
+          ctx: "Una empresa tecnológica de 200 empleados presenta altos niveles de estrés reportado (75% en encuesta interna), rotación anual del 25% (vs benchmark industria 15%), ausentismo del 8% y eNPS de 35 (rango malo). La empresa quiere implementar un programa integral de bienestar para mejorar estos indicadores en 12 meses.",
+          tarea: "Diseñar un programa integral de bienestar laboral de 12 meses que incluya los 4 pilares (físico, mental, social y financiero), calendario mensual de actividades con costos detallados, métricas de éxito con valores objetivo, presupuesto total desglosado y proyección de ROI basada en reducción de rotación y ausentismo.",
+          esp: "Estructurar programa en 4 pilares con mínimo 3 actividades por pilar. Crear calendario mensual detallado con frecuencia, duración y costo por actividad. Definir métricas de éxito: eNPS objetivo 60+, reducción ausentismo 30%, reducción rotación 40%. Elaborar presupuesto total desglosado por pilar y actividad. Calcular ROI proyectado basado en ahorro por reducción de rotación (costo reemplazo = 150% salario anual) y reducción de ausentismo.",
+          ej: "Pilar físico: Yoga semanal (1h/semana, $200/sesión, $10,400/año), Gimnasio corporativo (acceso ilimitado, $500/mes, $6,000/año), Chequeos médicos semestrales ($150/empleado, $30,000/año). Meta: Reducir ausentismo de 8% a 5.6% (30% reducción). Ahorro proyectado: 200 empleados × 8 días × $150/día × 30% = $72,000/año."
+        },
+        {
+          nombre: "🔥 Prevención de Burnout en Equipos Tech",
+          rol: "Eres un psicólogo organizacional certificado con 10 años de experiencia especializado en prevención de burnout y salud mental laboral en equipos de alta presión como desarrollo de software, DevOps y data science. Experto en el modelo Maslach Burnout Inventory (MBI), identificación de los 6 factores de riesgo de burnout, diseño de intervenciones individuales y organizacionales, y protocolos de detección temprana.",
+          ctx: "Un equipo de desarrollo de software de 30 personas presenta síntomas claros de burnout según encuesta interna: agotamiento emocional (85% reporta nivel alto), despersonalización (60%), baja realización personal (70%). La rotación anual es del 25%, ausentismo del 8%, productividad cayó 20% en últimos 6 meses y hay quejas recurrentes de estrés crónico.",
+          tarea: "Diseñar un programa integral de prevención de burnout que incluya identificación de los 6 factores de riesgo según modelo Maslach, 3 intervenciones individuales y 3 organizacionales con plan de implementación, protocolo de detección temprana con señales de alerta claras, y métricas de seguimiento basadas en MBI, ausentismo y productividad.",
+          esp: "Identificar y priorizar los 6 factores de riesgo: carga laboral, control, recompensa, comunidad, justicia, valores. Para cada factor asignar nivel (alto/medio/bajo) y proponer intervención específica. Diseñar 3 intervenciones individuales (coaching, mindfulness, terapia) y 3 organizacionales (políticas, procesos, cultura). Crear protocolo de detección con 5-7 señales de alerta observables y plan de acción por nivel de severidad. Definir métricas: MBI baseline y objetivo 6 meses, ausentismo, productividad, rotación.",
+          ej: "Factor de riesgo: Carga laboral excesiva (nivel alto, 80% del equipo reporta >50h/semana). Intervención organizacional: Implementar política de máximo 45h/semana con herramienta de capacity planning (Jira/Linear). Métrica: Reducción horas extras de 15h a 5h/semana promedio en 3 meses. Señal de alerta burnout: Empleado que antes respondía en Slack en 5min ahora tarda 2h+ y evita reuniones."
+        },
+        {
+          nombre: "📊 Evaluación de Clima Laboral",
+          rol: "Eres un psicólogo organizacional certificado con 12 años de experiencia diseñando y aplicando evaluaciones de clima laboral para empresas de 50 a 500 empleados. Experto en metodologías validadas internacionalmente, diseño de encuestas Likert, análisis estadístico de resultados, benchmarking por industria, y diseño de planes de acción basados en hallazgos con priorización por impacto y esfuerzo.",
+          ctx: "Una empresa de servicios financieros de 150 empleados necesita realizar su evaluación anual de clima laboral para identificar áreas de mejora, medir evolución vs año anterior (eNPS pasó de 45 a 38), y diseñar un plan de acción priorizado. La empresa tiene 5 departamentos: ventas (40), operaciones (35), tecnología (30), administrativo (25), gerencia (20).",
+          tarea: "Diseñar metodología completa de evaluación de clima laboral que incluya las 8 dimensiones clave a evaluar, diseño de instrumento de medición (encuesta de 50 preguntas Likert + 5 abiertas), plan de aplicación con comunicación y anonimato, metodología de análisis estadístico y cualitativo, y plan de acción con priorización por matriz impacto/esfuerzo.",
+          esp: "Definir 8 dimensiones: liderazgo, comunicación, trabajo en equipo, desarrollo profesional, reconocimiento, condiciones laborales, equilibrio vida-trabajo, propósito. Diseñar encuesta: 50 preguntas Likert (1-5) distribuidas en 8 dimensiones (6-7 por dimensión) + 5 preguntas abiertas. Plan de aplicación: comunicación previa 1 semana, anonimato garantizado, plazo 10 días hábiles, recordatorios día 5 y 8. Análisis: estadístico (medias por dimensión, desviación estándar, comparativa vs año anterior) + cualitativo (análisis temático de respuestas abiertas). Plan de acción: matriz impacto (alto/medio/bajo) vs esfuerzo (alto/medio/bajo) con quick wins primero.",
+          ej: "Dimensión liderazgo: Media 3.2/5 (vs 3.5 año anterior, caída 0.3). Hallazgo: 65% reporta que su jefe no da feedback constructivo. Quick win (alto impacto, bajo esfuerzo): Capacitación 4h para 20 líderes en 'Feedback efectivo'. Mediano plazo (alto impacto, medio esfuerzo): Implementar ciclo de feedback trimestral formal con herramienta 360°."
+        }
+      ],
+      "diseno_interiores": [
+        {
+          nombre: "🏠 Consultoría Residencial Completa",
+          rol: "Eres un diseñador de interiores senior certificado en NKBA (National Kitchen & Bath Association) con 15 años de experiencia especializado en proyectos residenciales de alta gama, estilos contemporáneos y optimización de espacios pequeños. Experto en paletas de colores con regla 60-30-10, selección de materiales con proveedores verificados, distribución de mobiliario para flujo natural, y presupuestos detallados por categoría.",
+          ctx: "Una pareja joven de profesionales (30-35 años) necesita rediseño completo de su apartamento de 85m² con 2 habitaciones, 2 baños, techo de 2.5m de altura, ubicado en zona urbana. Presupuesto total de $25,000 USD. Estilo deseado: Japandi (fusión japonés-escandinavo) con enfoque en minimalismo cálido, materiales naturales y espacios funcionales para home office.",
+          tarea: "Crear una propuesta de diseño integral para sala-comedor y habitación principal que incluya concepto de diseño con moodboard descriptivo, paleta de colores con regla 60-30-10 y códigos HEX, selección de 3 materiales clave con proveedores y costos, distribución de mobiliario optimizada para flujo natural, y presupuesto estimado detallado por categoría sin exceder $25,000.",
+          esp: "Definir concepto de diseño con descripción de moodboard (5-7 elementos visuales clave). Establecer paleta de colores con regla 60-30-10: 60% color principal, 30% secundario, 10% acento, incluyendo códigos HEX para cada uno. Seleccionar 3 materiales clave (pisos, textiles, madera) con proveedor, costo por m² y justificación. Optimizar distribución de mobiliario describiendo flujo natural y zonas funcionales. Elaborar presupuesto desglosado en 4 categorías: mobiliario, acabados, iluminación, decoración, con total ≤$25,000.",
+          ej: "Concepto Japandi: Minimalismo cálido con líneas limpias, materiales naturales (madera roble, lino, piedra), paleta neutra con acentos verdes, iluminación natural maximizada, espacios multifuncionales. Paleta 60%: Blanco roto #F5F5F0 (paredes, techo), 30%: Madera roble natural #C4A57B (pisos, mobiliario), 10%: Verde salvia #9CAF88 (cojines, plantas, arte). Material piso: Porcelanato formato grande 60x120cm tono arena, proveedor: Cerámicas Italia, costo $45/m², total 85m² = $3,825."
+        },
+        {
+          nombre: "🏪 Consultoría Comercial Retail",
+          rol: "Eres un diseñador de interiores especializado en espacios comerciales y retail con 12 años de experiencia creando experiencias de cliente memorables que impulsan ventas y fidelización. Experto en psicología del consumidor aplicada al diseño, merchandising visual, diseño experiencial sensorial, optimización de flujo de clientes, y cálculo de ROI de inversiones en diseño comercial.",
+          ctx: "Una cafetería de especialidad de 80m² ubicada en zona de alto tráfico peatonal necesita rediseño completo para mejorar experiencia de cliente, optimizar flujo de circulación, aumentar ticket promedio de $8 a $12 y diferenciarse de 3 competidores en un radio de 200m. Presupuesto: $60,000 USD. Objetivo: aumentar ventas 40% en 6 meses post-rediseño.",
+          tarea: "Desarrollar propuesta de diseño comercial completa que incluya concepto de marca espacial alineado con identidad, layout optimizado con zonas diferenciadas (entrada, pedido, consumo, trabajo), experiencia sensorial de cliente (vista, oído, olfato, tacto), selección de mobiliario con proveedores y costos, señalética y wayfinding, iluminación por zonas, y presupuesto detallado con ROI esperado.",
+          esp: "Definir concepto de marca espacial con 3-5 atributos clave y cómo se traducen en diseño. Crear layout con 4 zonas diferenciadas describiendo función, mobiliario y flujo de cliente entre ellas. Diseñar experiencia sensorial: elementos visuales (paleta, materiales), auditivos (playlist, acústica), olfativos (aroma signature), táctiles (texturas). Seleccionar mobiliario clave (mesas, sillas, barra, estanterías) con proveedor, costo unitario y cantidad. Diseñar iluminación por zona con temperatura de color específica. Elaborar presupuesto desglosado y calcular ROI: inversión vs aumento ventas proyectado.",
+          ej: "Concepto: 'Refugio urbano minimalista' - espacio cálido que invite a quedarse, trabajar y socializar. Zona entrada (10m²): exhibición productos retail, aroma café recién molido, iluminación cálida 2700K. Zona pedido (15m²): barra de 3m con 2 cajeros, menú digital, tiempo espera <3min. Zona consumo (40m²): 8 mesas 2p + 4 mesas 4p + 10 puestos barra, mix de sillas cómodas y taburetes. Zona trabajo (15m²): 6 puestos con enchufes, WiFi 100Mbps, iluminación 4000K. Mobiliario: Mesas madera maciza 2p ($200 c/u × 8 = $1,600), proveedor: Muebles Artesanales."
+        },
+        {
+          nombre: "🎨 Moodboard y Concepto de Diseño",
+          rol: "Eres un director creativo y diseñador de interiores con 10 años de experiencia especializado en conceptualización de espacios y creación de moodboards profesionales para presentaciones a clientes. Experto en tendencias de diseño contemporáneo, inspiración visual, storytelling espacial, selección de paletas con códigos HEX, y comunicación efectiva de visiones de diseño a clientes no técnicos.",
+          ctx: "Un cliente necesita propuesta visual (moodboard) para el rediseño de su habitación principal de 25m² en apartamento urbano. El cliente es un profesional de 35 años que trabaja desde casa 3 días por semana. Estilo preferido: contemporáneo con toques industriales. Presupuesto medio para mobiliario y decoración. El espacio debe funcionar como dormitorio y home office.",
+          tarea: "Crear concepto de diseño completo para habitación principal que incluya moodboard visual descriptivo con 10-15 elementos inspiracionales organizados, paleta de colores con 5 colores y códigos HEX aplicando regla 60-30-10, selección de 4-5 texturas y materiales clave con muestras descriptivas, 8-10 piezas de mobiliario inspiracionales con referencias y precios estimados, plan de iluminación con 3 tipos (general, tarea, acento), accesorios decorativos clave, y presupuesto estimado por categoría.",
+          esp: "Describir moodboard con 10-15 imágenes organizadas en 3 grupos: inspiración general (3-4 imágenes), paleta y materiales (4-5 imágenes), mobiliario y decoración (4-6 imágenes). Definir paleta de 5 colores con códigos HEX: 2 colores principales (60%), 2 secundarios (30%), 1 acento (10%). Describir 4-5 texturas/materiales con nombre, descripción táctil y visual, y aplicación en el espacio. Listar 8-10 piezas de mobiliario con nombre, descripción, referencia (marca/tienda) y precio estimado. Definir iluminación: 1 luz general (techo), 2 luces tarea (escritorio, lectura), 2 luces acento (decorativa). Listar 5-7 accesorios decorativos clave. Presupuesto en 4 categorías: mobiliario, iluminación, textiles, decoración.",
+          ej: "Moodboard Grupo 1 - Inspiración: Loft neoyorquino con ladrillo visto, apartamento escandinavo minimalista, espacio de trabajo moderno con plantas. Paleta: Principal 60% - Blanco hueso #FAF9F6 (paredes), Gris concreto #A8A9AD (acento pared); Secundario 30% - Madera nogal #6B4423 (mobiliario), Negro mate #2C2C2C (metal); Acento 10% - Verde botella #2F4F4F (plantas, cojines). Textura 1: Ladrillo visto pintado blanco - aplicación: pared principal detrás de cama - sensación: rústica moderna. Mobiliario 1: Cama plataforma con almacenamiento - referencia: IKEA MALM - precio: $400."
+        }
+      ],
+      "toondimension": [
+        {
+          nombre: "🎊 Evento Corporativo Anual",
+          rol: "Eres un productor de eventos corporativos senior con 12 años de experiencia organizando eventos de alto impacto para empresas Fortune 500 con presupuestos de $50K-$500K y asistencia de 100-1000 personas. Experto en concepto creativo con storytelling, logística completa (venue, AV, catering, decoración), cronogramas minuto a minuto, gestión de proveedores, y medición de KPIs de éxito (satisfacción, asistencia, NPS).",
+          ctx: "Una empresa tecnológica de 300 empleados necesita organizar su evento corporativo anual con objetivos de team building, reconocimiento de logros del año y lanzamiento de nuevo producto. Presupuesto total: $50,000 USD. Duración: 8 horas (8am-4pm). Fecha: septiembre 2025. Lugar: hotel o centro de eventos en ciudad principal.",
+          tarea: "Diseñar un plan de evento corporativo completo que incluya concepto creativo con narrativa cohesiva, cronograma minuto a minuto desde llegada hasta cierre, logística detallada (venue, AV, catering, decoración, transporte), selección de proveedores por categoría con costos, 3 KPIs de éxito medibles con metas, y plan de contingencia para riesgos principales.",
+          esp: "Desarrollar concepto creativo con título, narrativa y 3-5 elementos clave que conecten todo el evento. Crear cronograma minuto a minuto de 8 horas con mínimo 8 actividades bloques. Definir logística completa: venue (capacidad, ubicación, costo), AV (sonido, pantallas, iluminación), catering (desayuno, almuerzo, coffee breaks, cóctel), decoración (temática, centros de mesa, branding). Seleccionar 5-7 proveedores clave por categoría con costo estimado. Definir 3 KPIs: satisfacción (>90%), asistencia (>95%), NPS (>75). Identificar 3-5 riesgos principales con plan de mitigación.",
+          ej: "Concepto: 'Kinetic Summit 2025 - Innovación y Conexión' - narrativa de celebración de logros y mirada al futuro. Cronograma: 08:00-09:00 Registro + desayuno networking (60min), 09:00-09:45 Keynote CEO 'Visión 2026' (45min), 09:45-10:45 Lanzamiento producto estrella con demo en vivo (60min), 10:45-11:15 Coffee break + experiencia producto (30min), 11:15-13:15 Actividad team building por equipos (120min), 13:15-14:45 Almuerzo + ceremonia reconocimiento (90min), 14:45-16:00 Workshops simultáneos 3 tracks (75min), 16:00-16:30 Cierre + cóctel networking (30min). KPIs: Satisfacción 92%, Asistencia 285/300 (95%), NPS 78."
+        },
+        {
+          nombre: "🎈 Evento Infantil Temático",
+          rol: "Eres un especialista en eventos infantiles y familiares con 10 años de experiencia creando experiencias mágicas, seguras y memorables para niños de 3 a 12 años. Experto en diseño de actividades por rango de edad, entretenimiento infantil (personajes, shows, juegos), gestión de seguridad con protocolos específicos, decoración temática inmersiva, y coordinación de eventos para 50-200 niños con sus familias.",
+          ctx: "Una familia celebra el cumpleaños número 7 de su hijo con un evento para 100 personas (50 niños de 3-12 años y 50 adultos). Duración: 6 horas (2pm-8pm). Tema: 'Aventura en la Selva'. Presupuesto: $15,000 USD. Lugar: salón de eventos con área exterior. Se necesitan actividades diferenciadas por edad, entretenimiento, decoración inmersiva, alimentación infantil y adulta, y protocolos de seguridad.",
+          tarea: "Diseñar evento infantil temático completo que incluya concepto temático con storytelling, 3 zonas de actividades diferenciadas por edad (3-5, 6-8, 9-12 años), plan de entretenimiento (personajes, shows, juegos, cara pintura), decoración inmersiva con foto ops, menú infantil y adulto con opciones especiales (alergias, vegetarianos), protocolos de seguridad con ratio supervisores/niños, y presupuesto detallado por categoría.",
+          esp: "Desarrollar concepto temático 'Aventura en la Selva' con narrativa y 5-7 elementos clave de decoración. Diseñar 3 zonas de actividades: Zona 3-5 años (15m², actividades sensoriales, 2 supervisores), Zona 6-8 años (20m², juegos activos, 2 supervisores), Zona 9-12 años (20m², desafíos, 2 supervisores). Plan de entretenimiento: 2 personajes temáticos (3h c/u), 1 show mágico (30min), 4 juegos dirigidos (45min c/u), 2 artistas cara pintura (6h). Decoración: entrada temática, 3 photo ops, centros de mesa, globos, vinilos. Menú infantil: 3 opciones principales + snacks + bebidas + torta. Menú adulto: buffet 3 platos + bebidas. Seguridad: 6 supervisores certificados, botiquín, protocolo emergencia, pulseras identificación. Presupuesto por categoría.",
+          ej: "Zona 3-5 años 'Exploradores Baby': Actividades sensoriales con arena kinética, pintura con dedos, burbujas gigantes. 2 supervisores por cada 8 niños. Zona 6-8 años 'Cazadores de Tesoros': Búsqueda del tesoro con mapa, carrera de relevos selva, taller manualidades máscaras animales. 2 supervisores por cada 10 niños. Zona 9-12 años 'Supervivientes': Desafíos de equipo, tirolesa infantil, circuito de obstáculos. 2 supervisores por cada 12 niños. Entretenimiento: Personaje 'Mono Explorador' (3pm-6pm, $400), Personaje 'Loro Sabio' (4pm-7pm, $400), Show Mago Selva (5pm-5:30pm, $600)."
+        },
+        {
+          nombre: "💰 Presupuesto y Cotización de Evento",
+          rol: "Eres un gestor de eventos y especialista en presupuestos con 8 años de experiencia optimizando costos de eventos corporativos y sociales sin sacrificar calidad. Experto en negociación con proveedores, gestión financiera de eventos, elaboración de cotizaciones detalladas, análisis de ROI de eventos, y presentación de presupuestos ejecutivos a clientes y directivos.",
+          ctx: "Un cliente corporativo solicita cotización detallada para evento de fin de año de 200 personas con duración de 8 horas. El evento incluye: venue, catering completo, decoración temática, entretenimiento (banda en vivo + DJ), producción audiovisual, logística y personal. Presupuesto del cliente: $80,000-$100,000 USD. Se deben presentar 3 opciones (básica, estándar, premium) con desglose completo.",
+          tarea: "Elaborar presupuesto detallado de evento corporativo incluyendo: desglose por 8 categorías principales (venue, catering, decoración, entretenimiento, AV, logística, personal, marketing), 3 opciones de presupuesto (básica $60K, estándar $80K, premium $100K) con diferencias claras, 3 proveedores recomendados por categoría con precios, 5 recomendaciones de ahorro sin sacrificar calidad, cronograma de pagos con anticipos y fechas, y cláusulas de cancelación.",
+          esp: "Desglosar presupuesto en 8 categorías: venue (20-25%), catering (30-35%), decoración (10-15%), entretenimiento (10-15%), AV (8-10%), logística (5-8%), personal (5-7%), marketing/imprevistos (5%). Presentar 3 opciones con tabla comparativa: Básica $60K (venue sencillo, catering buffet, decoración estándar, DJ), Estándar $80K (venue medio, catering 3 tiempos, decoración temática, banda + DJ), Premium $100K (venue premium, catering gourmet, decoración luxury, banda reconocida + DJ + show). Para cada categoría listar 3 proveedores con rango de precios. Incluir 5 tips de ahorro (ej: evento jueves vs sábado ahorra 30%). Cronograma pagos: 30% anticipo, 40% 30 días antes, 30% día evento. Cláusulas: cancelación >60 días 100% reembolso, 30-60 días 50%, <30 días 0%.",
+          ej: "Categoría Catering (35% presupuesto): Opción Básica $21,000 - Buffet 3 platos, 3 bebidas, 1 postre, proveedor: Catering Express ($95/persona). Opción Estándar $28,000 - 3 tiempos servido, 5 bebidas, 2 postres, estación de café, proveedor: Gourmet Events ($140/persona). Opción Premium $35,000 - Menú degustación 5 tiempos, barra libre premium, maridaje vinos, proveedor: Luxury Catering ($175/persona). Tip ahorro: Reducir barra libre de 6h a 4h ahorra $3,000. Proveedor recomendado: Gourmet Events (experiencia 50+ eventos corporativos, referencias disponibles)."
+        }
+      ],
+      "ecokineti": [
+        {
+          nombre: "🌍 Auditoría Ambiental ISO 14001",
+          rol: "Eres un auditor ambiental certificado IRCA con 15 años de experiencia realizando auditorías de sistemas de gestión ambiental ISO 14001 para empresas industriales y de servicios de 50 a 500 empleados. Experto en identificación de aspectos e impactos ambientales, evaluación de cumplimiento legal ambiental, diseño de checklists de verificación, clasificación de hallazgos (conformidades, no conformidades mayores/menores, oportunidades de mejora), y elaboración de informes de auditoría con planes de acción correctiva.",
+          ctx: "Una empresa manufacturera de 100 empleados que produce componentes metálicos necesita auditoría ambiental completa para obtener certificación ISO 14001. La empresa consume 120,000 kWh/año de energía, 800m³ de agua, genera 15,000 kg de residuos (5,000 kg peligrosos), y tiene emisiones atmosféricas de procesos de soldadura. No tiene sistema de gestión ambiental formal implementado.",
+          tarea: "Realizar auditoría ambiental completa que incluya: alcance de la auditoría (5 áreas clave), metodología de auditoría (3 fases), checklist de 50+ puntos de verificación organizados por área, análisis de aspectos e impactos ambientales significativos, identificación de hallazgos con clasificación, y plan de acción correctiva con responsables y plazos para obtener certificación en 12 meses.",
+          esp: "Definir alcance en 5 áreas: operaciones productivas, gestión de residuos, consumo de recursos (agua/energía), emisiones atmosféricas, cumplimiento legal. Metodología en 3 fases: revisión documental (2 semanas), inspección现场 (1 semana), entrevistas personal (3 días). Checklist de 55 puntos distribuidos: operaciones (15), residuos (12), recursos (10), emisiones (8), legal (10). Identificar 5-7 aspectos ambientales significativos con evaluación de impacto (escala 1-5). Clasificar hallazgos: no conformidades mayores (requieren acción inmediata), menores (acción 30 días), oportunidades de mejora. Plan de acción: responsable, plazo, recurso necesario, indicador de cierre.",
+          ej: "Aspecto ambiental significativo: Generación de residuos peligrosos (lodos de soldadura) - 2,000 kg/año. Impacto: Contaminación suelo/agua si no maneja adecuadamente. Evaluación: Severidad 4, Probabilidad 3, Significancia 12 (alto). Hallazgo: No conformidad mayor - No existe procedimiento de gestión de residuos peligrosos ni contrato con gestor autorizado. Acción correctiva: Elaborar procedimiento (responsable: Jefe Ambiental, plazo: 30 días), contratar gestor autorizado (responsable: Compras, plazo: 60 días), capacitar personal (responsable: RRHH, plazo: 45 días). Indicador cierre: Procedimiento aprobado + contrato firmado + 80% personal capacitado."
+        },
+        {
+          nombre: "📈 Plan de Sostenibilidad 3 Años",
+          rol: "Eres un consultor senior en sostenibilidad corporativa con 12 años de experiencia ayudando empresas de 100 a 1000 empleados a implementar estrategias ESG, reducir huella de carbono, obtener certificaciones (B Corp, ISO 14001, GRI), y alinear operaciones con Objetivos de Desarrollo Sostenible (ODS). Experto en diagnóstico baseline, diseño de objetivos SMART, cálculo de ROI de iniciativas sostenibles, y reportabilidad ESG.",
+          ctx: "Una empresa tecnológica de 200 empleados quiere implementar estrategia de sostenibilidad para reducir huella de carbono 30% en 3 años, obtener certificación B Corp, y alinear operaciones con ODS. Datos actuales: consumo 120,000 kWh/año (60% renovable), 800m³ agua/año, 15,000 kg residuos (35% reciclado), 450 ton CO2e/año. Presupuesto disponible: $150,000/año.",
+          tarea: "Diseñar plan de sostenibilidad a 3 años que incluya: diagnóstico baseline con métricas actuales, 5 objetivos SMART alineados con ODS específicos, iniciativas por 3 pilares (ambiental, social, gobernanza) con costos y ahorros, cronograma trimestral con hitos, métricas ESG de seguimiento, presupuesto total anual, y proyección de ROI con payback period.",
+          esp: "Diagnóstico baseline: huella carbono 450 ton CO2e, energía 120,000 kWh (60% renovable), agua 800m³, residuos 15,000 kg (35% reciclado). 5 Objetivos SMART: (1) Reducir huella carbono 30% (450→315 ton) en 36 meses, (2) Alcanzar 80% energía renovable en 24 meses, (3) Desviar 80% residuos de vertedero en 24 meses, (4) Obtener certificación B Corp en 30 meses, (5) Reducir consumo agua 20% en 36 meses. Iniciativas por pilar: Ambiental (paneles solares, eficiencia energética, programa reciclaje), Social (voluntariado, capacitación, diversidad), Gobernanza (reportabilidad ESG, política compras sostenibles, ética). Cronograma trimestral con 12 hitos. Presupuesto $150K/año desglosado. ROI: ahorro energético $28K/año, payback 5.4 años.",
+          ej: "Objetivo 1 (ODS 13 - Acción clima): Reducir huella carbono de 450 a 315 ton CO2e en 36 meses. Indicador: ton CO2e/año. Iniciativa: Instalación paneles solares 50kW (inversión $80,000, ahorro $15,000/año, reducción 80 ton CO2e/año, payback 5.3 años). Cronograma: Q1 diseño y permisos, Q2 instalación, Q3 operación. Responsable: Gerente Operaciones. Métrica seguimiento: kWh generados/mes, ton CO2e evitados/mes."
+        },
+        {
+          nombre: " Certificaciones Verdes (LEED + ISO 14001)",
+          rol: "Eres un especialista en certificaciones ambientales y sostenibles con 10 años de experiencia guiando empresas en procesos de certificación LEED (Leadership in Energy and Environmental Design), ISO 14001, B Corp, y Carbon Neutral. Experto en requisitos de cada certificación, gap analysis, documentación requerida, gestión de auditorías, y mantenimiento de certificaciones obtenidas.",
+          ctx: "Una empresa de construcción de 150 empleados quiere obtener certificación LEED Gold para su nuevo edificio de oficinas de 5,000m² y certificación ISO 14001 para su sistema de gestión ambiental. El edificio está en fase de diseño. La empresa no tiene experiencia previa con certificaciones. Presupuesto para consultoría y certificación: $120,000 USD. Plazo objetivo: 18 meses.",
+          tarea: "Diseñar plan completo de certificación dual (LEED Gold + ISO 14001) que incluya: requisitos detallados de cada certificación, gap analysis del estado actual vs requisitos, plan de implementación con acciones por crédito/requisito, documentación requerida para cada certificación, cronograma de 18 meses con hitos, presupuesto desglosado (consultoría, mejoras, auditorías), y estrategia de mantenimiento post-certificación.",
+          esp: "LEED Gold: 60-79 puntos requeridos en 9 categorías (Integración de procesos, Ubicación y transporte, Sitios sostenibles, Eficiencia agua, Energía y atmósfera, Materiales y recursos, Calidad ambiental interior, Innovación, Prioridad regional). ISO 14001: 10 cláusulas (contexto, liderazgo, planificación, soporte, operación, evaluación, mejora). Gap analysis: evaluar cumplimiento actual en cada requisito (0-100%). Plan implementación: acciones específicas por crédito LEED y cláusula ISO con responsable y plazo. Documentación: manual ambiental, procedimientos, registros, evidencias. Cronograma 18 meses: meses 1-3 gap analysis, 4-9 implementación, 10-12 pre-auditoría, 13-15 auditoría certificación, 16-18 correcciones. Presupuesto: consultoría LEED $40K, consultoría ISO $30K, mejoras edificio $35K, auditorías $15K.",
+          ej: "LEED Crédito EA (Energía y Atmósfera) - Optimización de desempeño energético: 18 puntos disponibles. Requisito: Demostrar 20% mejora vs edificio baseline. Acción: Diseño fachada ventilada, iluminación LED con sensores, HVAC de alta eficiencia, paneles solares 30kW. Documentación: Modelo energético (EnergyPlus), memorias de cálculo, especificaciones técnicas. Responsable: Arquitecto sustentable. Plazo: Mes 6 (fase diseño). Costo adicional vs construcción convencional: $80,000. Ahorro proyectado: $25,000/año en energía. ISO Cláusula 6.1 - Acciones para abordar riesgos y oportunidades: Requisito: Identificar aspectos ambientales, requisitos legales, riesgos/oportunidades. Acción: Elaborar matriz de aspectos e impactos, lista de requisitos legales, plan de tratamiento de riesgos. Documentación: Matriz A/I, lista legal, plan de riesgos. Responsable: Jefe Ambiental. Plazo: Mes 4."
+        }
+      ],
+      "reintegration": [
+        {
+          nombre: "🏡 Tasación de Propiedad Residencial",
+          rol: "Eres un tasador inmobiliario certificado con 15 años de experiencia en valoración de propiedades residenciales y comerciales usando metodologías de comparación de mercado, enfoque de costos y capitalización de rentas. Experto en análisis de propiedades comparables, ajuste por factores diferenciales (ubicación, estado, antigüedad, amenities), y elaboración de informes de tasación con rango de confianza para fines de venta, compra o garantía bancaria.",
+          ctx: "Un cliente solicita tasación de propiedad unifamiliar de 250m² construidos en lote de 400m², con 4 habitaciones, 3 baños, piscina, jardín y garaje 2 carros. Ubicada en zona residencial de alta plusvalía con excelente conectividad, colegios, centros comerciales y seguridad 24h. Antigüedad: 8 años, estado: excelente. Objetivo: venta en próximos 6 meses. Zona: valor m² promedio $1,200-$1,400.",
+          tarea: "Realizar valoración detallada de la propiedad incluyendo: análisis comparativo de mercado con 3 propiedades similares vendidas en últimos 6 meses, factores de ajuste por diferencias (ubicación, tamaño, estado, amenities), cálculo de valor por m² ajustado, valor final recomendado con rango de confianza ±5%, y recomendaciones estratégicas para maximizar precio de venta.",
+          esp: "Usar metodología de comparación de mercado (enfoque principal) validada con enfoque de costos. Incluir 3 propiedades comparables de últimos 6 meses con: dirección (anonimizada), m² construidos/lote, habitaciones/baños, amenities, precio de venta, fecha venta, fuente. Ajustar cada comparable por factores: ubicación (±5-10%), tamaño (±3-5% por 10% diferencia), estado (±5-15%), antigüedad (±2% por año), amenities (piscina +8-12%, garaje +3-5%). Calcular valor m² promedio ajustado. Presentar valor final con rango de confianza ±5%. Incluir 3-5 recomendaciones para maximizar precio (mejoras, timing, estrategia comercial).",
+          ej: "Comparable 1: Casa 240m²/380m² lote, 4 hab/3 baños, piscina, garaje 2 carros, vendida $315,000 hace 3 meses en misma urbanización. Ajustes: +$5,000 por mejor estado, +$8,000 por ubicación premium. Valor ajustado: $328,000. Comparable 2: Casa 260m²/420m² lote, 4 hab/3 baños, sin piscina, garaje 2 carros, vendida $325,000 hace 4 meses en urbanización similar. Ajustes: -$12,000 por falta piscina, +$3,000 por mayor tamaño. Valor ajustado: $316,000. Comparable 3: Casa 245m²/390m² lote, 4 hab/3 baños, piscina, garaje 1 carro, vendida $318,000 hace 5 meses. Ajustes: +$5,000 por garaje 2 carros, -$2,000 por menor lote. Valor ajustado: $321,000. Valor m² promedio ajustado: $1,290/m². Valor estimado propiedad: $322,500 ±5% ($306,375-$338,625)."
+        },
+        {
+          nombre: "📝 Contrato de Compraventa Inmobiliaria",
+          rol: "Eres un abogado especialista en derecho inmobiliario con 18 años de experiencia en redacción, revisión y negociación de contratos de compraventa de bienes raíces residenciales y comerciales. Experto en cláusulas de protección bilateral, condiciones suspensivas y resolutorias, garantías, penalizaciones por incumplimiento, y prevención de litigios. Conocimiento profundo de normativa inmobiliaria local y mejores prácticas del sector.",
+          ctx: "Se va a realizar transacción de propiedad comercial (local de 150m² en centro comercial) valorada en $450,000 USD entre vendedor (persona natural, propietario único) y comprador (empresa SRL). El comprador requiere financiamiento bancario del 70% ($315,000). Se necesita contrato que proteja a ambas partes, contemple aprobación de crédito como condición suspensiva, y establezca penalizaciones claras por incumplimiento.",
+          tarea: "Redactar estructura completa de contrato de compraventa inmobiliaria incluyendo: 12-15 cláusulas esenciales con contenido detallado, condiciones suspensivas (aprobación crédito, estudio títulos, inspección técnica), garantías y forma de pago, penalizaciones por incumplimiento de ambas partes, jurisdicción aplicable y mecanismo de resolución de disputas, y anexos requeridos (certificados, planos, inventario).",
+          esp: "Estructurar contrato en 12-15 cláusulas numeradas con títulos claros: (1) Partes, (2) Objeto (descripción completa propiedad), (3) Precio y forma de pago, (4) Condiciones suspensivas, (5) Entrega y tradición, (6) Garantías del vendedor, (7) Estado del inmueble, (8) Impuestos y gastos, (9) Penalizaciones incumplimiento, (10) Fuerza mayor, (11) Jurisdicción, (12) Anexos. Para cada cláusula redactar contenido específico con lenguaje jurídico preciso pero accesible. Incluir condiciones suspensivas: aprobación crédito bancario (60 días), estudio títulos sin gravámenes, inspección técnica satisfactoria. Penalizaciones: comprador incumple pierde 10% anticipo, vendedor incumple devuelve doble anticipo. Jurisdicción: tribunales ciudad, arbitraje opcional.",
+          ej: "Cláusula 3 - Precio y forma de pago: 'El precio de compraventa es CUATROCIENTOS CINCUENTA MIL DÓLARES AMERICANOS ($450,000 USD), que el COMPRADOR pagará al VENDEDOR de la siguiente forma: (a) Anticipo del 10% ($45,000 USD) a la firma del presente contrato, (b) El 70% ($315,000 USD) mediante crédito bancario a desembolsar en máximo 60 días calendario, (c) El 20% restante ($90,000 USD) en la escritura pública de compraventa. Los pagos se realizarán mediante transferencia bancaria a cuenta del VENDEDOR.' Cláusula 4.1 - Condición suspensiva crédito: 'El presente contrato está condicionado a la aprobación del crédito bancario por parte de [Banco]. Si el crédito no es aprobado en 60 días, el contrato se resolverá sin penalización para el COMPRADOR y el VENDEDOR devolverá el anticipo en 15 días hábiles.'"
+        },
+        {
+          nombre: "📣 Marketing Inmobiliario de Lujo",
+          rol: "Eres un especialista en marketing inmobiliario digital con 10 años de experiencia vendiendo propiedades de lujo (>$300K) mediante estrategias omnicanal. Experto en fotografía y video inmobiliario profesional, copywriting persuasivo para high-net-worth individuals, segmentación de compradores premium, estrategias de pricing psicológico, y medición de KPIs (leads calificados, visitas, tiempo en mercado, tasa de conversión).",
+          ctx: "Propiedad de lujo: villa de 500m² construidos en 800m² de lote, 5 habitaciones, 6 baños, piscina infinity, vista al mar, acabados premium, domótica completa, ubicada en zona exclusiva. Precio: $1,200,000 USD. Necesita estrategia de venta rápida (objetivo: <90 días en mercado) en mercado competitivo con 5 propiedades similares disponibles. Propietario quiere discreción y solo compradores pre-calificados.",
+          tarea: "Diseñar plan de marketing inmobiliario 360° que incluya: descripción persuasiva de la propiedad (copy emocional + datos técnicos), estrategia de pricing con justificación, plan de difusión multicanal (portales premium, redes sociales, LinkedIn, eventos exclusivos, broker network), calendario de acciones 30-60-90 días, KPIs de seguimiento con metas, y protocolo de filtrado de compradores para garantizar solo leads pre-calificados.",
+          esp: "Redactar descripción de propiedad con estructura: headline impactante, párrafo emocional (estilo de vida), párrafo técnico (especificaciones), lista de amenities premium, llamado a la acción. Estrategia de pricing: análisis de 5 comparables, posicionamiento (premium/competitivo), justificación del precio, estrategia de negociación. Plan de difusión: (1) Portales premium (3 con costos), (2) Redes sociales (Instagram, LinkedIn con presupuesto), (3) Evento exclusivo open house (1 evento/mes), (4) Red de brokers internacionales (comisión). Calendario 90 días con acciones semanales. KPIs: leads calificados/mes (meta 20), visitas programadas (meta 8), ofertas recibidas (meta 3), tiempo en mercado (<90 días). Protocolo filtrado: pre-calificación financiera, NDA, acompañamiento agente.",
+          ej: "Headline: 'Villa Exclusiva Frente al Mar: Donde el Lujo se Encuentra con el Paraíso'. Copy emocional: 'Imagina despertar cada mañana con la brisa del mar, disfrutar atardeceres desde tu piscina infinity y vivir en un espacio diseñado para quienes aprecian lo extraordinario. Esta villa no es solo un hogar, es un estilo de vida.' Especificaciones: 500m² construidos, 500m² jardín, 5 suites con baño privado, cocina italiana Bulthaup, domótica Crestron, piscina infinity 25m, vista 180° al mar. Pricing: Precio lista $1,200,000 ($2,400/m²). Comparable más cercano: $1,150,000 (450m², sin domótica). Justificación: 15% premium por ubicación primera línea de mar + domótica + acabados importados. KPI Mes 1: 25 leads, 10 visitas, 2 ofertas."
+        }
+      ],
+      "kineticorp_ia": [
+        {
+          nombre: "🤖 Consultoría e Implementación de IA",
+          rol: "Eres un consultor senior de IA empresarial con 15 años de experiencia implementando soluciones de automatización, machine learning y LLMs en empresas Fortune 500 con presupuestos de $1M-$10M. Experto en casos de uso de IA con ROI comprobado, selección de stack tecnológico (open source vs APIs comerciales), change management para adopción de IA, y roadmaps de implementación por fases con métricas de éxito.",
+          ctx: "Una empresa de servicios profesionales (consultoría) con 500 empleados procesa manualmente 10,000 documentos por día (contratos, facturas, informes) con un costo operativo de $2M/año y tiempo promedio de procesamiento de 45 minutos por documento. La empresa quiere implementar IA para automatizar 70% del procesamiento en 24 meses. Presupuesto disponible: $500K año 1, $300K año 2.",
+          tarea: "Diseñar roadmap completo de implementación de IA que incluya: 5 casos de uso priorizados por ROI y complejidad, stack tecnológico recomendado cumpliendo GDPR/SOC2, plan de change management para 500 empleados, cronograma de 24 meses en 4 fases, proyección de ROI realista año 1 (máx 40%) y año 2, y métricas de éxito por fase.",
+          esp: "Priorizar 5 casos de uso con matriz ROI (alto/medio/bajo) vs complejidad (alto/medio/bajo): (1) OCR + extracción automática de facturas, (2) Clasificación automática de documentos, (3) Chatbot interno para consultas RRHH, (4) Resumen automático de informes, (5) Asistente de redacción de propuestas. Para cada caso: descripción, ROI proyectado, complejidad, plazo. Stack tecnológico: Azure AI Document Intelligence + LangChain + GPT-4 + base de datos vectorial. Change management: 4 fases (comunicación, capacitación, champions, medición). Cronograma 24 meses: Fase 1 (mes 1-6) piloto 1 caso, Fase 2 (7-12) escalar 3 casos, Fase 3 (13-18) 2 casos restantes, Fase 4 (19-24) optimización. ROI año 1: 35% reducción costos ($700K ahorro), año 2: 60% ($1.2M ahorro).",
+          ej: "Caso de uso 1: OCR + Extracción automática de facturas. Descripción: Automatizar extracción de datos de 5,000 facturas/mes (proveedor, monto, fecha, ítems) con precisión >95%. ROI: Reduce tiempo de 45min a 5min por factura (89% reducción), ahorro $180K/año. Complejidad: Media (requiere integración con ERP). Plazo: 4 meses. Stack: Azure AI Document Intelligence + custom validation rules + API ERP. Métricas éxito: precisión extracción >95%, tiempo procesamiento <10min, adopción usuarios >80%. Fase 1 (mes 1-4): POC con 500 facturas, Fase 2 (5-6): producción piloto 1000 facturas/mes, Fase 3 (7-12): escalar a 5000 facturas/mes."
+        },
+        {
+          nombre: "🏗️ Arquitectura de Software SaaS",
+          rol: "Eres un arquitecto de software senior con 12 años de experiencia diseñando plataformas SaaS B2B escalables de 0 a $10M ARR. Experto en arquitecturas de microservicios, patrones de diseño (DDD, CQRS, Event Sourcing), bases de datos políglotas, escalabilidad horizontal, multi-tenancy, seguridad (OWASP, SOC2), y migración de monolitos a arquitecturas modernas usando strangler fig pattern.",
+          ctx: "Una startup SaaS de gestión de proyectos tiene aplicación monolítica en PHP/Laravel con 5,000 usuarios activos y 500 usuarios concurrentes pico. La aplicación presenta problemas de escalabilidad (tiempos de respuesta >3s en horas pico), dificultades para deploy (2 horas de downtime), y limitaciones para agregar features complejas. Necesita migrar a arquitectura de microservicios para soportar 50,000 usuarios en 18 meses.",
+          tarea: "Diseñar arquitectura de microservicios completa que incluya: descomposición de dominio en 6-8 microservicios usando DDD, patrones de comunicación (síncrona REST/gRPC + asíncrona message broker), estrategia de base de datos políglota, plan de migración incremental con strangler fig pattern, estrategia de deploy con CI/CD y zero-downtime, y estimación de costos de infraestructura cloud.",
+          esp: "Descomponer dominio en 6-8 microservicios: (1) User Service (autenticación, perfiles), (2) Project Service (CRUD proyectos), (3) Task Service (gestión tareas), (4) Notification Service (emails, push), (5) File Service (almacenamiento archivos), (6) Analytics Service (reportes, métricas), (7) Billing Service (facturación, suscripciones), (8) API Gateway (routing, rate limiting). Comunicación síncrona: REST para queries simples, gRPC para alta performance. Comunicación asíncrona: Apache Kafka para eventos (tarea creada, proyecto actualizado). Bases de datos políglotas: PostgreSQL (datos transaccionales), MongoDB (documentos flexibles), Redis (cache, sesiones), Elasticsearch (búsqueda). Migración strangler fig: 6 fases de 3 meses, cada fase migra 1-2 módulos. Deploy: Kubernetes + ArgoCD (GitOps), CI/CD GitHub Actions, zero-downtime con blue-green. Costos cloud: $8,000/mes (AWS EKS + RDS + ElastiCache + MSK).",
+          ej: "Microservicio Task Service: Responsabilidad: CRUD de tareas, asignación, prioridades, dependencias entre tareas. Base de datos: PostgreSQL (tablas: tasks, task_assignments, task_dependencies). API: REST endpoints (GET /tasks, POST /tasks, PUT /tasks/{id}, DELETE /tasks/{id}). Eventos publicados: TaskCreated, TaskUpdated, TaskCompleted (Kafka topic: task-events). Eventos consumidos: ProjectUpdated (para actualizar progreso proyecto). Escalabilidad: horizontal con Kubernetes HPA (mín 2 pods, máx 10 pods, CPU threshold 70%). Deploy: contenedor Docker, imagen en ECR, deploy en EKS. Métricas: latency p99 <200ms, throughput 1000 req/s, error rate <0.1%."
+        },
+        {
+          nombre: "🔧 Desarrollo de API RESTful",
+          rol: "Eres un ingeniero de software senior especializado en diseño y desarrollo de APIs RESTful robustas, seguras y escalables con 10 años de experiencia. Experto en especificación OpenAPI 3.0, autenticación OAuth2/JWT, rate limiting, versionado de APIs, documentación con Swagger, testing de APIs (unit, integration, load), y mejores prácticas de diseño (HATEOAS, pagination, filtering, sorting).",
+          ctx: "Un equipo de desarrollo de 8 ingenieros necesita crear API pública para plataforma SaaS de e-commerce que será consumida por 50+ partners externos. La API debe soportar 10,000 requests/segundo, manejar autenticación segura, tener documentación completa, y seguir mejores prácticas de diseño RESTful. Stack actual: Node.js + Express, PostgreSQL, Redis.",
+          tarea: "Diseñar especificación completa de API RESTful que incluya: 15-20 endpoints organizados por recursos, métodos HTTP y códigos de respuesta, schemas de request/response con validación, estrategia de autenticación OAuth2 + JWT con refresh tokens, rate limiting por API key, versionado de API, especificación OpenAPI 3.0 completa, y plan de testing (unit, integration, load testing).",
+          esp: "Diseñar 15-20 endpoints organizados en 5 recursos: (1) Products (GET /products, GET /products/{id}, POST /products, PUT /products/{id}, DELETE /products/{id}), (2) Orders (GET /orders, POST /orders, GET /orders/{id}, PUT /orders/{id}/status), (3) Customers (GET /customers, POST /customers, GET /customers/{id}), (4) Inventory (GET /inventory, PUT /inventory/{productId}), (5) Analytics (GET /analytics/sales, GET /analytics/products). Para cada endpoint definir: método HTTP, path, parámetros (query, path, body), códigos de respuesta (200, 201, 400, 401, 404, 500), schema request/response con tipos. Autenticación: OAuth2 con JWT (access token 1h, refresh token 30d), API keys para partners. Rate limiting: 1000 req/min por API key, 100 req/min por endpoint crítico. Versionado: URI (/v1/products, /v2/products). OpenAPI 3.0: especificación completa con examples. Testing: 80% coverage unit, integration tests con Postman, load testing con k6 (10,000 req/s).",
+          ej: "Endpoint: GET /v1/products. Descripción: Lista productos con paginación, filtros y ordenamiento. Parámetros query: page (default 1, max 100), limit (default 20, max 100), category (string, optional), min_price (number, optional), max_price (number, optional), sort (created_at|price|name, default created_at), order (asc|desc, default desc). Respuesta 200: {\"data\": [{\"id\": \"uuid\", \"name\": \"string\", \"price\": number, \"category\": \"string\", \"stock\": number, \"created_at\": \"ISO8601\"}], \"pagination\": {\"page\": 1, \"limit\": 20, \"total\": 150, \"pages\": 8}}. Códigos error: 400 (parámetros inválidos), 401 (no autenticado), 429 (rate limit excedido). Rate limit: 1000 req/min. Cache: Redis TTL 5min para queries sin filtros."
+        }
+      ]
+    };
+
+    const PLANTILLAS_RENTABLES = {
+      "consultor_ia": { tipo: "consultor", ingreso: "premium", rol: "Consultor IA Fortune 500 con 15 años implementando LLMs y automatización en empresas multinacionales con presupuestos $5M+.", ctx: "Multinacional de 5000 empleados quiere implementar IA para automatizar procesos críticos y reducir costos operativos en 40% en 3 años.", tarea: "Diseñar roadmap de transformación digital con IA incluyendo casos de uso priorizados, tecnologías recomendadas, estimación de inversión y ROI proyectado a 5 años.", esp: "Casos de uso: automatización procesos, chatbots, análisis predictivo. Tecnologías: GPT-4, Claude, modelos custom. Inversión: $5M+ (licencias + desarrollo + capacitación). ROI: reducción costos operativos 40%. Roadmap: 5 fases (6-12-18-24-36 meses).", ej: "" },
+      "consultor_estrategia": { tipo: "consultor", ingreso: "premium", rol: "Consultor de Estrategia de Negocios con MBA de Harvard y 18 años de experiencia en consultoría estratégica para empresas de $100M+ revenue.", ctx: "Empresa SaaS B2B con $20M ARR quiere escalar a $100M ARR en 3 años mediante expansión internacional y nuevos productos.", tarea: "Desarrollar plan estratégico de crecimiento incluyendo análisis de mercado, posicionamiento competitivo, estrategia de pricing, plan de expansión (3 países) y proyecciones financieras.", esp: "Análisis: TAM/SAM/SOM por mercado. Posicionamiento: diferenciación vs competidores. Pricing: value-based pricing. Expansión: LATAM, Europa, Asia. Nuevos productos: 2 lanzamientos/año. Proyecciones: $20M → $100M ARR.", ej: "" },
+      "ingeniero_ml": { tipo: "ingeniero", ingreso: "premium", rol: "Ingeniero de Machine Learning Senior con PhD en Computer Science y 10 años deploying modelos de ML en producción a escala para empresas con 10M+ usuarios.", ctx: "E-commerce con 10M usuarios necesita sistema de recomendación personalizado para aumentar conversión en 25% y ticket promedio en 15%.", tarea: "Diseñar arquitectura de sistema de recomendación incluyendo algoritmos (collaborative filtering + deep learning), pipeline de datos, feature store, A/B testing framework y monitoreo de modelos.", esp: "Algoritmos: ALS, Two-Tower Neural Network, Transformers. Pipeline: Apache Spark + Kafka + Feature Store. A/B testing: 10% tráfico, 4 semanas. Métricas: precision@k, recall@k, CTR, revenue lift. Infraestructura: AWS SageMaker + Kubernetes.", ej: "" },
+      "ingeniero_ciberseguridad": { tipo: "ingeniero", ingreso: "premium", rol: "Ingeniero de Ciberseguridad Senior certificado CISSP, CISM, OSCP con 12 años protegiendo infraestructuras críticas y datos sensibles de empresas Fortune 500.", ctx: "Banco digital con 2M clientes necesita auditoría de seguridad completa y plan de hardening para cumplir PCI-DSS y proteger contra ataques avanzados.", tarea: "Realizar evaluación de seguridad completa incluyendo threat modeling, vulnerability assessment, penetration testing, plan de remediación y roadmap de cumplimiento PCI-DSS.", esp: "Threat modeling: STRIDE + DREAD. Vulnerability assessment: OWASP Top 10 + CWE Top 25. Penetration testing: red team + blue team. Remediación: priorización por CVSS score. PCI-DSS: 12 requisitos de cumplimiento. Presupuesto: $500K.", ej: "" },
+      "disenador_ux": { tipo: "disenador", ingreso: "muy_alto", rol: "Diseñador UX/UI Senior con 12 años creando interfaces digitales para productos con 10M+ usuarios. Experto en design systems y user research que ha aumentado conversión 200%+.", ctx: "App fintech con 5M usuarios necesita rediseño completo para mejorar UX, aumentar retención 30% y conversión de ventas 50%.", tarea: "Diseñar sistema de diseño completo incluyendo user research, user flows, wireframes, prototipos interactivos, design system y plan de implementación.", esp: "User research: 50 entrevistas + surveys 10,000 usuarios. User flows: 15 flujos críticos. Wireframes: low-fi + hi-fi. Prototipos: Figma interactivo. Design system: componentes, tokens, guidelines. Testing: usability testing 5 rondas.", ej: "" },
+      "phd_data": { tipo: "master", ingreso: "premium", rol: "PhD en Data Science con 8 años liderando equipos de data science en empresas tech. Experto en statistical modeling, causal inference y experimentación que ha generado $100M+ en valor.", ctx: "Empresa de streaming con 50M suscriptores necesita modelo de churn prediction para reducir cancelaciones en 25% y aumentar LTV.", tarea: "Desarrollar modelo de churn prediction incluyendo análisis exploratorio, feature engineering, modelado (ensemble methods), validación, deployment y monitoreo.", esp: "EDA: análisis 2 años de datos, 100+ features. Feature engineering: behavioral, demographic, engagement. Modelos: XGBoost, LightGBM, Neural Networks. Validación: cross-validation, AUC > 0.85. Deployment: API REST + batch predictions. Impacto: 25% reducción churn = $50M/año.", ej: "" },
+      "tecnico_cloud": { tipo: "tecnico", ingreso: "alto", rol: "Técnico en Redes y Cloud certificado AWS Solutions Architect Associate, Cisco CCNA con 7 años administrando infraestructuras cloud y redes para empresas medianas.", ctx: "Empresa de 200 empleados necesita migrar de servidor local a AWS para mejorar disponibilidad y reducir costos de infraestructura.", tarea: "Diseñar plan de migración a cloud incluyendo assessment de infraestructura actual, diseño de arquitectura AWS, plan de migración, seguridad y optimización de costos.", esp: "Assessment: inventario servidores, aplicaciones, dependencias. Arquitectura AWS: VPC, EC2, RDS, S3. Migración: phased approach, 3 meses. Seguridad: security groups, IAM, encryption. Costos: $5K/mes (vs $8K actual).", ej: "" },
+      "analista_datos": { tipo: "analista", ingreso: "muy_alto", rol: "Analista de Datos Senior con 8 años transformando datos en insights de negocio para empresas Fortune 500. Experto en SQL avanzado, Python, visualización y storytelling con datos.", ctx: "Retailer con 500 tiendas necesita análisis de datos de ventas para optimizar inventario, pricing y marketing, generando $10M en ahorros anuales.", tarea: "Realizar análisis de datos completo incluyendo extracción y limpieza de datos, análisis exploratorio, modelos predictivos, visualizaciones y recomendaciones accionables.", esp: "Datos: 2 años de ventas, 10M+ transacciones. Análisis: cohort analysis, RFM, market basket. Modelos: demand forecasting, price optimization. Visualizaciones: dashboards ejecutivos. Recomendaciones: optimización inventario $5M, pricing $3M, marketing $2M.", ej: "" },
+      "dev_fullstack": { tipo: "desarrollador", ingreso: "muy_alto", rol: "Desarrollador Full Stack Senior con 10 años construyendo aplicaciones web escalables para startups y empresas tech. Experto en React, Node.js, Python y arquitecturas cloud-native.", ctx: "Startup fintech necesita desarrollar plataforma de pagos completa en 6 meses para procesar 100K transacciones/día.", tarea: "Desarrollar plan técnico completo incluyendo arquitectura de software, stack tecnológico, plan de desarrollo, testing, seguridad y deployment.", esp: "Arquitectura: microservicios + event-driven. Stack: React + Node.js + Python + PostgreSQL + Redis. Desarrollo: 12 sprints, equipo 6 desarrolladores. Testing: 80% code coverage, load testing. Seguridad: PCI-DSS compliance, encryption. Deployment: AWS + Kubernetes + CI/CD.", ej: "" },
+      "dev_blockchain": { tipo: "desarrollador", ingreso: "premium", rol: "Desarrollador Blockchain Senior con 6 años construyendo dApps y smart contracts en Ethereum, Solana y Polygon. Experto en Solidity, Web3, DeFi y NFTs con proyectos $100M+ TVL.", ctx: "Startup Web3 quiere lanzar protocolo DeFi de lending/borrowing en Ethereum con $50M TVL objetivo en primer año.", tarea: "Desarrollar plan técnico de protocolo DeFi incluyendo arquitectura smart contracts, tokenomics, seguridad (audits), frontend dApp y plan de lanzamiento.", esp: "Smart contracts: lending pool, interest rate model, liquidations. Tokenomics: governance token, staking rewards. Seguridad: 3 audits (Certik, OpenZeppelin, Trail of Bits). Frontend: React + Web3.js + wallet integration. Lanzamiento: testnet → mainnet → marketing.", ej: "" },
+      "especialista_seo": { tipo: "especialista", ingreso: "alto", rol: "Especialista en SEO Técnico con 8 años optimizando sitios web con 10M+ visitas mensuales. Experto en technical SEO, Core Web Vitals, schema markup y link building que ha aumentado tráfico orgánico 500%+.", ctx: "E-commerce con $30M revenue necesita mejorar SEO para aumentar tráfico orgánico 200% y reducir dependencia de paid ads en 40%.", tarea: "Realizar auditoría SEO completa y plan de optimización incluyendo technical SEO, on-page SEO, content strategy, link building y proyecciones de tráfico.", esp: "Auditoría: crawlability, indexability, site speed. Technical: Core Web Vitals, schema markup, XML sitemaps. On-page: keyword optimization, meta tags, internal linking. Content: 50 artículos/mes, cluster strategy. Link building: 100 backlinks quality/mes. Proyección: tráfico 500K → 1.5M visitas/mes.", ej: "" },
+      "especialista_growth": { tipo: "especialista", ingreso: "muy_alto", rol: "Growth Hacker con 7 años escalando startups de 0 a 10M usuarios mediante experimentación y growth loops. Experto en viral marketing, referral programs y conversion optimization que ha generado crecimiento 10x.", ctx: "App SaaS B2C con 100K usuarios necesita escalar a 1M usuarios en 12 meses con presupuesto limitado de $100K.", tarea: "Diseñar estrategia de growth hacking incluyendo análisis de funnel, experimentos de crecimiento, viral loops, referral program y métricas de growth.", esp: "Funnel analysis: acquisition, activation, retention, revenue, referral. Experimentos: 50 experimentos, ICE scoring. Viral loops: invite system, social sharing. Referral program: incentivado, double-sided rewards. Métricas: viral coefficient > 1, CAC < LTV/3. Proyección: 100K → 1M usuarios.", ej: "" }
+    };
+
+    const PLANTILLAS_MERCADO = {
+      "marketing_digital": [
+        { nombre: "📣 Campaña Google Ads", categoria: "marketing_digital", rol: "Eres especialista en Google Ads con 8 años gestionando campañas con presupuestos $100K+/mes. Experto en Search, Display, Shopping y YouTube Ads con ROAS promedio 5x.", ctx: "E-commerce de moda con $5M revenue anual quiere lanzar campaña Google Ads para aumentar ventas online 40% en 6 meses. Presupuesto: $20K/mes.", tarea: "Diseñar estructura de campaña Google Ads completa incluyendo: tipos de campaña, segmentación, pujas, anuncios y métricas de seguimiento.", esp: "Campañas: Search (marca + genéricos), Shopping, Display remarketing. Segmentación: demográfica, geográfica, intereses. Pujas: tCPA para conversión. Anuncios: responsive search ads con 15 títulos + 4 descripciones. Métricas: CTR > 3%, CPA < $25, ROAS > 4x.", ej: "Campaña Search marca: pujas por nombre de marca, CTR esperado 8-12%, CPA $15. Campaña Shopping: feed de productos optimizado, ROAS objetivo 5x." },
+        { nombre: "📣 Estrategia Meta Ads", categoria: "marketing_digital", rol: "Eres experto en Meta Ads (Facebook/Instagram) con 10 años gestionando campañas para marcas D2C y e-commerce con presupuestos $50K-$500K/mes.", ctx: "Marca de cosméticos naturales quiere escalar de $500K a $2M revenue anual usando Meta Ads. Presupuesto: $30K/mes. Producto: cremas faciales $45-85.", tarea: "Diseñar estrategia completa de Meta Ads incluyendo: estructura de campañas, audiencias, creativos, embudo de conversión y escalado.", esp: "Estructura: TOFU (awareness), MOFU (consideración), BOFU (conversión). Audiencias: lookalike 1-3%, intereses beauty, retargeting. Creativos: video UGC, carrusel beneficios, testimonios. Embudo: 3 etapas con KPIs por etapa. Escalado: vertical y horizontal.", ej: "TOFU: Video UGC 15s, audiencia lookalike 1%, objetivo reach, CPM < $8. MOFU: Carrusel beneficios, retargeting video viewers 50%, objetivo traffic, CPC < $0.50." },
+        { nombre: "📣 Plan Marketing 360°", categoria: "marketing_digital", rol: "Eres Director de Marketing Digital con 12 años liderando estrategias omnicanal para marcas consumer con revenue $10M-$100M.", ctx: "Marca de alimentos saludables quiere lanzar nuevo producto en mercado competitivo. Presupuesto marketing: $100K trimestrales. Objetivo: 10,000 ventas primer mes.", tarea: "Diseñar plan de marketing 360° incluyendo: estrategia de lanzamiento, canales, calendario, presupuesto y KPIs.", esp: "Fases: pre-lanzamiento (4 semanas), lanzamiento (2 semanas), post-lanzamiento (8 semanas). Canales: Meta Ads, Google Ads, influencers, email, PR. Calendario semanal con acciones. Presupuesto por canal. KPIs: awareness, consideración, conversión.", ej: "Pre-lanzamiento: Teaser en redes, lista espera email (meta 5,000 suscriptores), seeding influencers (20 micro-influencers). Lanzamiento: Campaña Meta Ads $40K, Google Ads $20K." }
+      ],
+      "redes_sociales": [
+        { nombre: "📱 Estrategia Instagram", categoria: "redes_sociales", rol: "Eres Social Media Manager experto en Instagram con 8 años creciendo cuentas de 0 a 100K+ seguidores orgánicamente. Experto en algoritmo, reels, carruseles y engagement.", ctx: "Marca personal de coach de negocios quiere crecer de 5K a 50K seguidores en 6 meses y generar 20 leads calificados/mes para programa $2,000.", tarea: "Diseñar estrategia de contenido Instagram incluyendo: pilares de contenido, formato por pilar, calendario editorial, hashtags y métricas.", esp: "4 pilares de contenido: educativo (40%), inspiracional (30%), promocional (20%), personal (10%). Formatos: reels 3x/semana, carruseles 2x/semana, stories diarios. Calendario 30 días. Hashtags: mix de tamaño. Métricas: alcance, engagement rate, saves, shares, leads.", ej: "Lunes: Reel educativo '3 errores al emprender' (objetivo: alcance). Miércoles: Carrusel 'Framework de productividad' (objetivo: saves)." },
+        { nombre: "📱 Estrategia LinkedIn B2B", categoria: "redes_sociales", rol: "Eres experto en LinkedIn B2B con 10 años generando leads calificados para empresas SaaS y consultoras mediante contenido orgánico y LinkedIn Ads.", ctx: "Consultora B2B de transformación digital quiere generar 50 leads calificados/mes para servicio $10K+ usando LinkedIn orgánico + ads.", tarea: "Diseñar estrategia LinkedIn completa incluyendo: optimización de perfil, estrategia de contenido, engagement, LinkedIn Ads y sistema de lead nurturing.", esp: "Perfil: headline optimizado, about con propuesta de valor, featured section. Contenido: 3 posts/semana (thought leadership, casos de éxito, insights). Engagement: comentar 10 posts/día en nicho. Ads: sponsored content + message ads. Lead nurturing: secuencia email 5 pasos.", ej: "Post lunes: Thought leadership 'Tendencias IA 2025' (objetivo: autoridad). Post miércoles: Caso de éxito cliente con métricas (objetivo: credibilidad)." },
+        { nombre: "📱 Estrategia TikTok", categoria: "redes_sociales", rol: "Eres creador de contenido TikTok con 5 años y 2M+ seguidores. Experto en algoritmo, trends, hooks virales y monetización de audiencia.", ctx: "Marca de snacks saludables quiere viralizar en TikTok para generar awareness y dirigir tráfico a e-commerce. Presupuesto: $10K/mes en creator fund + ads.", tarea: "Diseñar estrategia TikTok incluyendo: tipo de contenido, frecuencia, hooks virales, colaboraciones con creators y TikTok Ads.", esp: "Contenido: 70% educativo/entretenimiento, 20% trends, 10% promocional. Frecuencia: 1-2 videos/día. Hooks: primeros 3 segundos críticos. Creators: 5 micro-influencers/mes. Ads: Spark Ads con contenido orgánico top. Métricas: views, engagement rate, CTR, conversions.", ej: "Video tipo 1: '3 snacks saludables en 60 segundos' (formato tutorial rápido). Hook ejemplo: 'Deja de comer esto si quieres energía todo el día...'" }
+      ],
+      "creacion_video": [
+        { nombre: " Guion Video YouTube", categoria: "creacion_video", rol: "Eres guionista y director creativo especializado en contenido YouTube con retención alta. Has creado videos con 1M+ views y promedio de retención 60%+.", ctx: "Canal de tecnología con 100K suscriptores quiere crear video review de nuevo smartphone para maximizar views y engagement. Duración objetivo: 12-15 minutos.", tarea: "Escribir guion completo de video YouTube incluyendo: hook de apertura, estructura, puntos clave, CTA y optimización para algoritmo.", esp: "Hook primeros 15 segundos (retención crítica). Estructura: intro (1min), unboxing (2min), especificaciones (3min), pruebas (5min), veredicto (2min), CTA (1min). Incluir 3 momentos 'wow' para retención. CTA: like, subscribe, comentario. Optimización: título, thumbnail, tags.", ej: "Hook: 'Este smartphone de $800 acaba de matar al iPhone 15... y te voy a mostrar por qué en los próximos 12 minutos.'" },
+        { nombre: "🎬 Video Corporativo", categoria: "creacion_video", rol: "Eres productor de video corporativo con 10 años creando videos para marcas Fortune 500. Experto en storytelling corporativo, motion graphics y producción de alto nivel.", ctx: "Empresa SaaS B2B necesita video corporativo de 2 minutos para website y presentaciones de ventas. Objetivo: explicar producto y generar confianza en prospects.", tarea: "Diseñar concepto y guion de video corporativo incluyendo: concepto creativo, estructura narrativa, visuales, voz en off y plan de producción.", esp: "Duración: 120 segundos. Estructura: problema (20s), solución (60s), beneficios (30s), CTA (10s). Estilo: live action + motion graphics. Voz en off: profesional, tono confiable. Locaciones: oficina + pantalla verde. Entregables: video final + 3 cuts para redes.", ej: "0-20s: '¿Cansado de perder horas en tareas repetitivas?' (problema con estadísticas). 20-80s: 'Presentamos [Producto], la plataforma que automatiza...' (solución con demo)." },
+        { nombre: "🎬 Reels/TikTok Viral", categoria: "creacion_video", rol: "Eres creador de contenido viral especializado en Reels y TikTok con 100+ videos con 1M+ views. Experto en hooks, trends, edición rápida y algoritmos.", ctx: "Marca de fitness quiere crear serie de 10 reels virales para aumentar seguidores y vender programa de entrenamiento online $97.", tarea: "Crear 10 conceptos de reels virales incluyendo: hook, estructura, edición, música trending y CTA.", esp: "Duración: 15-30 segundos por reel. Hook primeros 3 segundos obligatorio. Estructura: problema → solución → resultado. Edición: cortes rápidos cada 2-3s. Música: trending sounds. CTA: 'Link en bio' o 'Comenta X para más info'.", ej: "Reel 1: Hook '3 ejercicios que hago TODOS los días para tener abs' (tutorial rápido). Reel 2: Hook 'El error #1 que cometes en el gym' (educativo con corrección)." }
+      ],
+      "creacion_app": [
+        { nombre: "📱 MVP App Mobile", categoria: "creacion_app", rol: "Eres Product Manager y desarrollador mobile con 8 años lanzando apps iOS/Android desde 0 a 100K+ usuarios. Experto en MVP, UX mobile y monetización.", ctx: "Startup quiere lanzar app de meditación guiada para competir con Calm/Headspace. Presupuesto desarrollo: $50K. Tiempo: 4 meses. Objetivo: 10,000 downloads primer mes.", tarea: "Diseñar plan de desarrollo de MVP incluyendo: features prioritarias, stack tecnológico, UX/UI, plan de lanzamiento y monetización.", esp: "Features MVP: 10 meditaciones guiadas, timer personalizado, progreso básico, notificaciones. Stack: React Native + Firebase. UX: onboarding 3 pasos, diseño minimalista. Lanzamiento: App Store + Google Play + marketing. Monetización: freemium con suscripción $9.99/mes.", ej: "Feature 1: Biblioteca de 10 meditaciones (5min, 10min, 20min). Feature 2: Timer con sonidos ambientales. Stack: React Native (iOS+Android), Firebase (auth, DB, push), Stripe (pagos)." },
+        { nombre: "📱 App SaaS Web", categoria: "creacion_app", rol: "Eres Arquitecto de Software y CTO con 12 años construyendo plataformas SaaS B2B escalables de 0 a $10M ARR. Experto en arquitectura cloud, multi-tenancy y seguridad.", ctx: "Empresa quiere construir plataforma SaaS de gestión de proyectos para equipos remotos. Presupuesto: $200K. Tiempo: 6 meses. Objetivo: 500 clientes pagando $49/mes en año 1.", tarea: "Diseñar arquitectura técnica completa incluyendo: stack, base de datos, autenticación, multi-tenancy, escalabilidad y plan de desarrollo.", esp: "Stack: Next.js + PostgreSQL + Redis + AWS. Autenticación: Auth0 o Clerk. Multi-tenancy: row-level security. Escalabilidad: horizontal con load balancer. Desarrollo: 12 sprints de 2 semanas. Testing: 80% coverage. Deployment: CI/CD con GitHub Actions.", ej: "Sprint 1-2: Setup proyecto, auth, base de datos. Sprint 3-4: CRUD proyectos y tareas. Sprint 5-6: Colaboración en tiempo real (WebSockets)." },
+        { nombre: "📱 App con IA", categoria: "creacion_app", rol: "Eres desarrollador especializado en aplicaciones con IA integrada. Experto en APIs de LLMs (OpenAI, Anthropic), RAG, fine-tuning y optimización de costos de inference.", ctx: "Startup quiere crear app de asistente personal con IA que responda preguntas, agende citas y gestione tareas. Presupuesto: $80K. Tiempo: 5 meses.", tarea: "Diseñar arquitectura de app con IA incluyendo: modelo de IA, integración API, memoria de conversación, RAG si aplica y optimización de costos.", esp: "Modelo: GPT-4o o Claude 3.5 para respuestas, modelo pequeño para clasificación. Integración: API REST con streaming. Memoria: vector DB (Pinecone) para contexto. RAG: documentos del usuario. Costos: caching, model routing, rate limiting. UX: indicador de typing, regenerar respuesta.", ej: "Arquitectura: Frontend (React Native) → Backend (Node.js) → AI Service (OpenAI API) → Vector DB (Pinecone). Costo objetivo: <$0.01 por consulta." }
+      ],
+      "creacion_imagenes": [
+        { nombre: "🎨 Imágenes con Midjourney", categoria: "creacion_imagenes", rol: "Eres artista digital y prompt engineer especializado en Midjourney con 5 años creando imágenes para marcas, editoriales y campañas publicitarias.", ctx: "Agencia de publicidad necesita crear 20 imágenes conceptuales para campaña de marca de lujo. Estilo: minimalista, elegante, alta gama. Presupuesto: $5K.", tarea: "Crear guía de prompts para Midjourney incluyendo: estructura de prompt, parámetros, estilos y ejemplos para cada concepto.", esp: "Estructura prompt: [sujeto] + [estilo] + [iluminación] + [composición] + [parámetros]. Parámetros clave: --ar (aspect ratio), --style (raw, scenic), --q (quality), --v (versión). Estilos: fotografía producto, lifestyle, abstracto. Entregables: 20 prompts + 40 variaciones.", ej: "Prompt ejemplo: 'Luxury perfume bottle on marble surface, soft natural lighting from left, minimalist composition --ar 16:9 --style raw --q 2 --v 6.0'." },
+        { nombre: "🎨 Imágenes con DALL-E 3", categoria: "creacion_imagenes", rol: "Eres diseñador gráfico especializado en DALL-E 3 con experiencia creando imágenes para marketing digital, redes sociales y contenido editorial.", ctx: "E-commerce necesita crear 50 imágenes de producto con fondos lifestyle para catálogo online y ads. Productos: zapatos deportivos en 5 colores.", tarea: "Crear sistema de prompts para DALL-E 3 incluyendo: estructura, estilos de fondo, consistencia de producto y optimización para ads.", esp: "Estructura: descripción detallada del producto + contexto lifestyle + estilo fotográfico + especificaciones técnicas. Fondos: urbano, naturaleza, gimnasio, calle, estudio. Consistencia: describir producto exactamente igual en cada prompt. Optimización: formato cuadrado para ads, alta resolución.", ej: "Prompt: 'Professional product photography of red running shoes with white sole, placed on urban concrete surface with blurred city background, natural daylight, shallow depth of field, commercial advertising style, 4K resolution, square format'." },
+        { nombre: "🎨 Branding con IA", categoria: "creacion_imagenes", rol: "Eres director creativo y brand designer con 15 años creando identidades de marca. Ahora usas IA (Midjourney, DALL-E, Stable Diffusion) para acelerar proceso creativo.", ctx: "Startup de tecnología verde necesita identidad de marca completa: logo, paleta de colores, tipografía, estilo fotográfico y guidelines. Presupuesto: $15K.", tarea: "Crear proceso de diseño de branding con IA incluyendo: moodboard, exploración de logo, paleta, tipografía y brand guidelines.", esp: "Fase 1: Moodboard con 20 imágenes IA (estilos, colores, vibes). Fase 2: 10 conceptos de logo explorados con IA. Fase 3: Paleta de colores (5 colores con HEX). Fase 4: Tipografía (2 fuentes: heading + body). Fase 5: Brand guidelines documento. Fase 6: Aplicaciones (tarjeta, web, social).", ej: "Paleta: Verde principal #2D5016, Verde secundario #4A7C2E, Azul tech #1E3A5F, Blanco #FFFFFF, Gris #F5F5F5." }
+      ],
+      "copywriting": [
+        { nombre: "✍️ Landing Page", categoria: "copywriting", rol: "Eres copywriter especializado en landing pages de alta conversión con 10 años creando páginas que convierten 5-15% para SaaS, e-commerce y servicios.", ctx: "SaaS de gestión de proyectos necesita landing page para campaña de ads. Producto: $29/mes. Objetivo: 5% conversión de visitantes a trial gratuito.", tarea: "Escribir copy completo de landing page incluyendo: headline, subheadline, beneficios, testimonios, pricing y CTA.", esp: "Estructura: Hero (headline + subheadline + CTA), Beneficios (3-5 puntos), Social proof (logos + testimonios), Features (con screenshots), Pricing (3 planes), FAQ, CTA final. Tono: profesional pero cercano. Longitud: 800-1200 palabras total.", ej: "Headline: 'Gestiona tus proyectos sin el caos de las herramientas complicadas'. Subheadline: 'La plataforma todo-en-uno que tu equipo realmente va a usar. Prueba gratis 14 días, sin tarjeta de crédito'." },
+        { nombre: "✍️ Email Sequence", categoria: "copywriting", rol: "Eres especialista en email marketing y copywriting con 8 años creando secuencias de email que generan 30-50% open rate y 5-10% click rate.", ctx: "Curso online de marketing digital ($497) necesita secuencia de 7 emails para convertir leads de webinar en compradores. Lista: 5,000 suscriptores.", tarea: "Escribir secuencia de 7 emails incluyendo: asunto, preheader, cuerpo y CTA de cada email.", esp: "Email 1: Bienvenida + valor inmediato. Email 2: Historia personal + problema. Email 3: Solución + beneficios. Email 4: Testimonios + social proof. Email 5: Oferta + urgencia. Email 6: Manejo de objeciones. Email 7: Último llamado + escasez. Longitud: 200-400 palabras por email.", ej: "Email 1 asunto: 'Bienvenido + tu regalo especial 🎁'. Email 5 asunto: '⏰ Solo 48 horas: 30% de descuento'." },
+        { nombre: "✍️ Sales Page", categoria: "copywriting", rol: "Eres copywriter de ventas directas con 12 años creando sales pages que generan $1M+ en revenue para infoproductos, cursos y servicios high-ticket.", ctx: "Programa de coaching ejecutivo ($5,000) necesita sales page larga para convertir tráfico frío. Objetivo: 2% conversión. Tráfico esperado: 10,000 visitantes/mes.", tarea: "Escribir sales page completa incluyendo: headline, historia, beneficios, módulos, testimonios, garantía, pricing y CTA.", esp: "Estructura: Headline impactante, Historia de transformación, Problema (agitación), Solución (presentación programa), Beneficios (10+ puntos), Módulos (detalle), Testimonios (5+), Bonus, Garantía, Pricing, FAQ, CTA final. Longitud: 3,000-5,000 palabras.", ej: "Headline: 'Cómo ejecutivos como tú están duplicando su salario en 12 meses sin trabajar más horas'. Garantía: '30 días, si no ves resultados te devuelvo 100%'." }
+      ],
+      "email_marketing": [
+        { nombre: "📧 Newsletter Semanal", categoria: "email_marketing", rol: "Eres especialista en email marketing con 10 años creando newsletters semanales con 40%+ open rate para audiencias de 10K-100K suscriptores.", ctx: "Newsletter de productividad para profesionales tiene 15,000 suscriptores. Objetivo: mantener 40% open rate, crecer a 25,000 en 6 meses y monetizar con sponsors.", tarea: "Diseñar estructura de newsletter semanal incluyendo: formato, secciones, tono, frecuencia y estrategia de crecimiento y monetización.", esp: "Formato: texto plano con mínimo diseño. Secciones: Intro personal (200 palabras), Tip principal (500 palabras), Herramienta recomendada (100 palabras), CTA (50 palabras). Frecuencia: martes 8am. Crecimiento: referral program, lead magnets. Monetización: sponsors $500/edición a partir de 20K suscriptores.", ej: "Sección 1: 'Esta semana aprendí...' (historia personal breve). Sección 2: 'El framework de las 3 tareas' (tip accionable con pasos)." },
+        { nombre: "📧 Secuencia Onboarding", categoria: "email_marketing", rol: "Eres especialista en email automation y onboarding con 8 años diseñando secuencias que aumentan activación 50% y reducen churn 30% en SaaS.", ctx: "SaaS de diseño gráfico tiene 30% de usuarios que no activan cuenta en primeros 7 días. Necesita secuencia de onboarding de 5 emails para aumentar activación a 60%.", tarea: "Diseñar secuencia de onboarding de 5 emails incluyendo: timing, asunto, contenido y CTA de cada email.", esp: "Email 1: Bienvenida inmediata (minuto 0). Email 2: Primer valor (día 1). Email 3: Feature clave (día 3). Email 4: Caso de éxito (día 5). Email 5: Oferta ayuda (día 7). Cada email: 1 objetivo claro, 1 CTA principal, <200 palabras. Métricas: open rate, click rate, activación.", ej: "Email 1 (min 0): Asunto '¡Bienvenido! Empieza aquí 🚀'. Email 2 (día 1): Asunto 'Tu primera creación en 5 minutos'." },
+        { nombre: "📧 Campaña Re-engagement", categoria: "email_marketing", rol: "Eres especialista en email re-engagement con experiencia recuperando 20-30% de suscriptores inactivos en listas de 50K+ suscriptores.", ctx: "Lista de email de 80,000 suscriptores tiene 40,000 inactivos (sin abrir en 90 días). Objetivo: reactivar 10,000 o limpiar lista para mejorar deliverability.", tarea: "Diseñar campaña de re-engagement de 3 emails incluyendo: estrategia, asuntos, contenido y métricas de éxito.", esp: "Email 1: '¿Sigues ahí?' con oferta especial. Email 2: 'Última oportunidad' con urgencia. Email 3: 'Nos despedimos' con opción de re-suscribirse. Timing: 3 días entre emails. Métricas: open rate, click rate, re-suscripciones. Si no abren 3 emails: eliminar de lista.", ej: "Email 1 asunto: '¿Todo bien? Te extrañamos 👋'. Email 3 asunto: 'Es hora de decir adiós...'." }
+      ],
+      "seo_sem": [
+        { nombre: "🔍 Auditoría SEO", categoria: "seo_sem", rol: "Eres especialista en SEO técnico con 10 años realizando auditorías para sitios con 1M+ visitas mensuales. Experto en Core Web Vitals, crawling, indexación y arquitectura web.", ctx: "E-commerce con 500K visitas/mes tiene problemas de SEO técnico: velocidad lenta, errores 404, duplicación de contenido. Objetivo: aumentar tráfico orgánico 50% en 6 meses.", tarea: "Realizar auditoría SEO técnica completa incluyendo: análisis de velocidad, crawling, indexación, arquitectura y plan de acción priorizado.", esp: "Velocidad: Core Web Vitals (LCP, FID, CLS). Crawling: sitemap, robots.txt, internal linking. Indexación: canonical tags, meta robots, duplicate content. Arquitectura: URL structure, breadcrumbs, silos. Plan de acción: priorizado por impacto/esfuerzo. Herramientas: Screaming Frog, PageSpeed, Search Console.", ej: "Hallazgo 1: LCP 4.2s (objetivo <2.5s). Acción: Optimizar imágenes (WebP), lazy loading, CDN. Impacto: alto, esfuerzo: medio." },
+        { nombre: "🔍 Estrategia de Keywords", categoria: "seo_sem", rol: "Eres especialista en keyword research y estrategia de contenido SEO con 8 años posicionando sitios en top 3 para keywords competitivas con 10K+ búsquedas/mes.", ctx: "Blog de finanzas personales quiere posicionar en keywords de alto volumen (50K+ búsquedas/mes) para monetizar con ads y afiliados. Dominio nuevo, autoridad baja.", tarea: "Crear estrategia de keywords incluyendo: research, clustering, plan de contenido y roadmap de posicionamiento.", esp: "Research: 100 keywords con volumen, dificultad, intención. Clustering: agrupar por tema (10 clusters). Plan de contenido: 1 pillar page + 10 cluster pages por cluster. Roadmap: empezar con long-tail (baja dificultad), escalar a head terms. Métricas: rankings, tráfico orgánico, revenue.", ej: "Cluster 1: 'Cómo ahorrar dinero' (pillar) + 'cómo ahorrar en supermercado', 'apps para ahorrar', 'método 50/30/20' (clusters)." },
+        { nombre: "🔍 Campaña Google Ads SEM", categoria: "seo_sem", rol: "Eres especialista en Google Ads SEM con 10 años gestionando campañas Search con presupuestos $50K-$500K/mes y ROAS promedio 6x.", ctx: "Clínica dental quiere generar 100 citas/mes mediante Google Ads. Presupuesto: $10K/mes. Ticket promedio: $500. Competencia alta en zona.", tarea: "Diseñar campaña Google Ads Search completa incluyendo: estructura, keywords, anuncios, pujas y optimización.", esp: "Estructura: campañas por servicio (implantes, ortodoncia, blanqueamiento). Keywords: exact match + phrase match. Anuncios: responsive search ads con extensions. Pujas: tCPA con objetivo $100 por cita. Optimización: search terms, quality score, landing pages. Métricas: CTR > 5%, CPC < $3, conversión > 10%.", ej: "Campaña 1: 'Implantes Dentales'. Keywords: 'implantes dentales precio' (exact), 'costo implante dental' (phrase)." }
+      ],
+      "ecommerce": [
+        { nombre: "🛒 Optimización Conversión", categoria: "ecommerce", rol: "Eres especialista en CRO (Conversion Rate Optimization) para e-commerce con 8 años aumentando conversión de 1% a 5%+ en tiendas con $1M-$50M revenue.", ctx: "Tienda online de moda con 200K visitas/mes y conversión 1.2% quiere llegar a 3%. Ticket promedio: $80. Problemas identificados: checkout complejo, fotos bajas calidad.", tarea: "Diseñar plan de optimización de conversión incluyendo: análisis de funnel, tests A/B prioritarios y mejoras quick wins.", esp: "Análisis: funnel completo (landing → producto → carrito → checkout → compra). Quick wins: fotos alta calidad, badges de confianza, urgency. Tests A/B: checkout simplificado, payment options, shipping threshold. Métricas: conversión por etapa, AOV, revenue/visita. Herramientas: Hotjar, Google Analytics, Optimizely.", ej: "Quick win 1: Mejorar fotos de producto (inversión $5K, impacto estimado +0.3% conversión). Test A/B 1: Checkout de 1 página vs 3 páginas (hipótesis: +0.5% conversión)." },
+        { nombre: "🛒 Estrategia Dropshipping", categoria: "ecommerce", rol: "Eres experto en dropshipping y e-commerce con 7 años construyendo tiendas de $0 a $100K/mes revenue. Experto en selección de productos, marketing y operaciones.", ctx: "Emprendedor quiere iniciar tienda dropshipping en nicho de hogar sostenible. Presupuesto inicial: $5K. Objetivo: $10K revenue mes 3, $30K mes 6.", tarea: "Crear plan de lanzamiento de tienda dropshipping incluyendo: selección de productos, plataforma, marketing y operaciones.", esp: "Productos: 10-15 productos ganadores (validar con TikTok/Amazon trends). Plataforma: Shopify + Oberlo/DSers. Marketing: TikTok orgánico + Meta Ads. Operaciones: proveedores verificados, tiempos de envío <15 días. Métricas: ROAS > 3x, margen > 30%, refund rate < 5%.", ej: "Producto 1: 'Organizador de bambú para cocina' (costo $8, venta $35, margen 77%). Plataforma: Shopify plan básico $39/mes." },
+        { nombre: "🛒 Email E-commerce", categoria: "ecommerce", rol: "Eres especialista en email marketing para e-commerce con 10 años generando 30-40% de revenue total de tiendas mediante email automation.", ctx: "Tienda online de cosméticos con 50K suscriptores y $2M revenue anual quiere aumentar revenue de email de 20% a 35% del total.", tarea: "Diseñar sistema de email automation para e-commerce incluyendo: flows principales, segmentación y optimización.", esp: "Flows: Welcome series (5 emails), Abandoned cart (3 emails), Post-purchase (4 emails), Win-back (3 emails), VIP (mensual). Segmentación: por valor (RFM), por comportamiento, por preferencias. Métricas: revenue per email, open rate, click rate, conversión. Optimización: A/B testing asuntos, contenido, timing.", ej: "Welcome flow: Email 1 (inmediato): Bienvenida + 10% descuento. Abandoned cart: Email 1 (1 hora): Recordatorio carrito." }
+      ],
+      "automatizacion": [
+        { nombre: "⚙️ Automatización con Zapier", categoria: "automatizacion", rol: "Eres especialista en automatización de procesos con Zapier, Make y n8n con 6 años automatizando flujos de trabajo para PYMES y startups.", ctx: "Agencia de marketing con 15 empleados pierde 20 horas/semana en tareas manuales: entrada de leads, reportes, facturación. Quiere automatizar 80% de estas tareas.", tarea: "Diseñar sistema de automatización incluyendo: flujos principales, herramientas, triggers, acciones y métricas de eficiencia.", esp: "Flujos: Lead entry (formulario → CRM → email), Reportes (datos → dashboard → email semanal), Facturación (proyecto completado → factura → envío). Herramientas: Zapier + Google Sheets + HubSpot + Slack. Métricas: horas ahorradas/semana, errores reducidos, tiempo de respuesta.", ej: "Flow 1: Nuevo lead en formulario web → crear contacto en HubSpot → enviar email bienvenida → notificar Slack equipo de ventas." },
+        { nombre: "⚙️ Automatización con IA", categoria: "automatizacion", rol: "Eres experto en automatización con IA usando GPT-4, Claude, APIs de LLMs y herramientas como Make, Zapier y custom scripts.", ctx: "Empresa de servicios recibe 500 emails/día de clientes. 60% son preguntas frecuentes que toman 2 horas/día responder manualmente. Quiere automatizar 80% de respuestas.", tarea: "Diseñar sistema de automatización con IA para respuesta de emails incluyendo: clasificación, generación de respuestas, escalation y métricas.", esp: "Clasificación: IA categoriza emails (FAQ, soporte, ventas, quejas). Generación: GPT-4 genera respuesta basada en base de conocimiento. Escalation: emails complejos o quejas → humano. Métricas: % automatizado, tiempo de respuesta, satisfacción cliente. Herramientas: OpenAI API + Gmail API + base de conocimiento.", ej: "Flow: Email recibido → IA clasifica (FAQ 60%, soporte 20%, ventas 15%, quejas 5%) → Si FAQ: GPT-4 genera respuesta basada en KB → envía." },
+        { nombre: "️ Automatización de Redes Sociales", categoria: "automatizacion", rol: "Eres especialista en automatización de marketing digital con experiencia en herramientas como Buffer, Hootsuite, Later y APIs de redes sociales.", ctx: "Marca personal necesita mantener presencia en 5 redes sociales (Instagram, LinkedIn, TikTok, Twitter, Facebook) pero solo tiene 5 horas/semana para contenido.", tarea: "Diseñar sistema de automatización de redes sociales incluyendo: creación de contenido, scheduling, republicación y métricas.", esp: "Creación: batch de contenido mensual (1 día/mes). Scheduling: herramienta automática (Buffer/Later). Republicación: contenido evergreen reciclado. Métricas: alcance, engagement, crecimiento seguidores. Tiempo total: 5 horas/semana (1 hora creación, 1 hora engagement, 3 horas análisis).", ej: "Día 1 mes: Crear 30 posts (10 educativos, 10 inspiracionales, 10 promocionales). Scheduling: programar en Buffer para 5 redes." }
+      ]
+    };
+
+    const ROLES_CLASICO = ["Asesor Financiero", "Consultor Bienestar", "Diseñador Interiores", "Productor Eventos", "Auditor Ambiental", "Tasador Inmobiliario", "Consultor IA"];
+
+    function switchSection(sectionId, element) {
+      document.querySelectorAll('.content-section').forEach(s => s.classList.remove('active'));
+      document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+      document.getElementById(`section-${sectionId}`).classList.add('active');
+      if (element) element.classList.add('active');
+      
+      const titles = {
+        'dashboard': 'Dashboard', 'clasico': 'Generador Clásico', 'enterprise': 'Enterprise Template',
+        'templates': 'Plantillas por Empresa', 'rentables': 'Alta Rentabilidad',
+        'mercado': 'Actividades del Mercado', 'chatbot': 'Chatbot IA', 'settings': 'Configuración'
+      };
+      document.getElementById('sectionTitle').textContent = titles[sectionId] || sectionId;
+    }
+
+    function updateCounter(fieldId) {
+      const textarea = document.getElementById(fieldId);
+      const counter = document.getElementById('count-' + fieldId);
+      const length = textarea.value.length;
+      counter.textContent = length + '/80';
+      
+      if (length >= 80) {
+        counter.className = 'char-counter ok';
+        textarea.classList.remove('invalido');
+        textarea.classList.add('valido');
+      } else {
+        counter.className = 'char-counter bad';
+        textarea.classList.remove('valido');
+        textarea.classList.add('invalido');
+      }
+    }
+
+    function validarCampos80() {
+      const campos = ['rol', 'ctx', 'tarea', 'esp'];
+      const invalidos = [];
+      campos.forEach(id => {
+        const val = document.getElementById(id).value.trim();
+        if (val.length < 80) invalidos.push(id.toUpperCase());
+      });
+      return invalidos;
+    }
+
+    function selectFormato(f, el) {
+      document.querySelectorAll('#section-clasico .template-card').forEach(c => c.classList.remove('selected'));
+      el.classList.add('selected');
+      formatoSalidaSeleccionado = f;
+      const nombres = {'markdown':'📝 Markdown','texto':'📄 Texto Plano','json':'🔧 JSON','lista':'🔢 Lista','tabla':'📊 Tabla'};
+      document.getElementById('formatoActual').textContent = nombres[f];
+    }
+
+    function selectPersonality(personality, el) {
+      document.querySelectorAll('.personality-chip').forEach(c => c.classList.remove('active'));
+      el.classList.add('active');
+      chatPersonalityActual = personality;
+      addChatMessage('ai', `Personalidad cambiada a: **${CHAT_PERSONALITIES[personality].nombre}**. ¿En qué puedo ayudarte?`);
+    }
+
+    function addChatMessage(role, content) {
+      const container = document.getElementById('chatMessages');
+      const div = document.createElement('div');
+      div.className = 'chat-message ' + role;
+      div.innerHTML = `<div class="chat-bubble">${content}</div>`;
+      container.appendChild(div);
+      container.scrollTop = container.scrollHeight;
+    }
+
+    function handleChatKey(event) {
+      if (event.key === 'Enter' && !event.shiftKey) {
+        event.preventDefault();
+        enviarMensaje();
+      }
+    }
+
+    async function enviarMensaje() {
+      const input = document.getElementById('chatInput');
+      const mensaje = input.value.trim();
+      if (!mensaje) return;
+
+      const k = document.getElementById("apiKey").value;
+      if (!k && !modoLocal) return alert("API Key requerida para el chatbot");
+
+      addChatMessage('user', mensaje);
+      input.value = '';
+      chatHistory.push({ role: 'user', content: mensaje });
+
+      try {
+        const systemMsg = CHAT_PERSONALITIES[chatPersonalityActual].system;
+        const messages = [{ role: 'system', content: systemMsg }, ...chatHistory];
+
+        let content;
+        if (modoLocal) {
+          const res = await fetch("http://localhost:11434/api/chat", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ model: "llama3.2", messages, stream: false })
+          });
+          const data = await res.json();
+          content = data.message.content;
+        } else {
+          const res = await fetch("https://api.groq.com/openai/v1/chat/completions", {
+            method: "POST",
+            headers: { "Authorization": `Bearer ${k}`, "Content-Type": "application/json" },
+            body: JSON.stringify({ model: "llama-3.3-70b-versatile", messages, temperature: 0.7 })
+          });
+          const data = await res.json();
+          content = data.choices[0].message.content;
+        }
+
+        chatHistory.push({ role: 'assistant', content });
+        addChatMessage('ai', content);
+      } catch (e) {
+        addChatMessage('ai', '❌ Error: ' + e.message);
+      }
+    }
+
+    function limpiarChat() {
+      chatHistory = [];
+      document.getElementById('chatMessages').innerHTML = '<div class="chat-message ai"><div class="chat-bubble">¡Hola! Soy tu asistente IA. ¿En qué puedo ayudarte hoy?</div></div>';
+    }
+
+    document.addEventListener("DOMContentLoaded", () => {
+      const k = localStorage.getItem("groq_api_key");
+      if (k) { 
+        document.getElementById("apiKey").value = k; 
+        document.getElementById("apiStatus").style.display = "flex";
+      }
+      document.getElementById("apiKey").addEventListener("input", (e) => {
+        localStorage.setItem("groq_api_key", e.target.value);
+        document.getElementById("apiStatus").style.display = e.target.value ? "flex" : "none";
+      });
+      
+      const de = document.getElementById("dashboardEmpresas");
+      for (const [key, v] of Object.entries(EMPRESAS)) {
+        const d = document.createElement("div"); 
+        d.className = "template-card";
+        d.style.textAlign = "center";
+        d.innerHTML = `<div style="font-size: 2rem; margin-bottom: 0.5rem;">${v.icon}</div><div style="font-weight: 600;">${v.name}</div><div style="font-size: 0.8rem; color: var(--text-secondary);">${v.desc}</div>`;
+        d.onclick = () => { renderExamples(key); switchSection('templates', document.querySelectorAll('.nav-item')[3]); };
+        de.appendChild(d);
+      }
+
+      const sg = document.getElementById("sectorGrid");
+      for (const [key, v] of Object.entries(EMPRESAS)) {
+        const d = document.createElement("div"); 
+        d.className = "template-card";
+        d.style.textAlign = "center";
+        d.innerHTML = `<div style="font-size: 2rem; margin-bottom: 0.5rem;">${v.icon}</div><div style="font-weight: 600;">${v.name}</div><div style="font-size: 0.8rem; color: var(--text-secondary);">${v.desc}</div>`;
+        d.onclick = () => { renderExamples(key); };
+        sg.appendChild(d);
+      }
+      
+      filtrarPorSector();
+      filtrarRentables();
+      filtrarMercado();
+      loadHistory();
+    });
+
+    function filtrarPorSector() {
+      sectorActual = document.getElementById("sectorSelect").value;
+      const ts = document.getElementById("templateSelect"); ts.innerHTML = '<option value="">--</option>';
+      
+      for (const [empresaKey, plantillas] of Object.entries(PLANTILLAS_EMPRESAS)) {
+        if (!sectorActual || sectorActual === empresaKey) {
+          plantillas.forEach((p, idx) => {
+            const o = document.createElement("option"); 
+            o.value = `${empresaKey}_${idx}`; 
+            o.textContent = `${EMPRESAS[empresaKey].icon} ${p.nombre}`; 
+            ts.appendChild(o);
+          });
+        }
+      }
+      
+      const rs = document.getElementById("roleSelect"); rs.innerHTML = '<option value="">--</option>';
+      ROLES_CLASICO.forEach(r => { const o = document.createElement("option"); o.value = r; o.textContent = r; rs.appendChild(o); });
+    }
+
+    document.getElementById("templateSelect").addEventListener("change", (e) => {
+      const val = e.target.value;
+      if (!val) return;
+      
+      const parts = val.split('_');
+      const empresaKey = parts[0];
+      const idx = parseInt(parts[1]);
+      const p = PLANTILLAS_EMPRESAS[empresaKey][idx];
+      
+      if (p) { 
+        document.getElementById("rol").value = p.rol; updateCounter('rol');
+        document.getElementById("ctx").value = p.ctx; updateCounter('ctx');
+        document.getElementById("tarea").value = p.tarea; updateCounter('tarea');
+        document.getElementById("esp").value = p.esp; updateCounter('esp');
+        document.getElementById("ej").value = p.ej; updateCounter('ej');
+      }
+    });
+
+    async function generarClasico() {
+      const invalidos = validarCampos80();
+      if (invalidos.length > 0) {
+        return alert(`⚠️ Los siguientes campos necesitan mínimo 80 caracteres:\n\n${invalidos.join(', ')}\n\nPor favor, amplía la información para obtener mejores resultados.`);
+      }
+
+      const k = document.getElementById("apiKey").value;
+      if (!k && !modoLocal) return alert("API Key requerida");
+      
+      const fmt = { 'markdown': 'Markdown con headers', 'texto': 'Texto plano', 'json': 'JSON puro', 'lista': 'Lista numerada', 'tabla': 'Tabla Markdown' }[formatoSalidaSeleccionado];
+      let sys = `Eres experto. Formato: ${fmt}. Tono: ${document.getElementById("tono").value}. Estructura: Rol, Contexto, Tarea, Especificaciones.`;
+      
+      const neg = document.getElementById("negativas").value;
+      if (neg) sys += `\n\n<restricciones_negativas>\n${neg}\n</restricciones_negativas>`;
+      
+      if (document.getElementById("modo_cot").checked) {
+        sys += `\n\n<instruccion>\nAntes de responder, piensa paso a paso dentro de etiquetas <thinking>.\n</instruccion>`;
+      }
+      
+      if (document.getElementById("auto_verificacion").checked) {
+        sys += `\n\n<verificacion>\nAntes de emitir la respuesta final, verifica internamente: 1. ¿Cumple el formato? 2. ¿Violaste restricciones negativas? Si fallas, corrígelo.\n</verificacion>`;
+      }
+
+      const usr = `R: ${document.getElementById("rol").value}\nC: ${document.getElementById("ctx").value}\nT: ${document.getElementById("tarea").value}\nE: ${document.getElementById("esp").value}\nEj: ${document.getElementById("ej").value}`;
+      
+      const btn = document.getElementById("btn-generar-clasico"); btn.textContent = "⏳ Generando..."; btn.disabled = true;
+      try {
+        let res;
+        if (modoLocal) {
+          res = await fetch("http://localhost:11434/api/chat", { method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify({ model: "llama3.2", messages: [{role:"system", content:sys}, {role:"user", content:usr}], stream: false }) });
+          const d = await res.json(); ultimoPrompt = d.message.content;
+        } else {
+          res = await fetch("https://api.groq.com/openai/v1/chat/completions", { method: "POST", headers: {"Authorization": `Bearer ${k}`, "Content-Type": "application/json"}, body: JSON.stringify({ model: "llama-3.3-70b-versatile", messages: [{role:"system", content:sys}, {role:"user", content:usr}], temperature: 0.3 }) });
+          const d = await res.json(); ultimoPrompt = d.choices[0].message.content;
+        }
+        document.getElementById("output-clasico").textContent = ultimoPrompt;
+        document.getElementById("output-clasico").style.display = "block";
+        document.getElementById("acciones-clasico").style.display = "flex";
+        promptsGenerados++;
+        document.getElementById('metricPrompts').textContent = promptsGenerados;
+      } catch (e) { alert("Error: " + e.message); }
+      finally { btn.textContent = " Generar Master Prompt"; btn.disabled = false; }
+    }
+
+    function renderExamples(empresaKey) {
+      const g = document.getElementById("examplesGrid"); g.innerHTML = "";
+      const list = PLANTILLAS_EMPRESAS[empresaKey] || [];
+      
+      if (list.length === 0) {
+        g.innerHTML = '<p style="color:var(--text-secondary); grid-column: 1/-1;">No hay plantillas disponibles para esta empresa.</p>';
+        return;
+      }
+      
+      list.forEach((p, idx) => {
+        const d = document.createElement("div"); d.className = "template-card";
+        d.innerHTML = `<span class="tag" style="background:var(--accent); color:white;">${EMPRESAS[empresaKey].icon} ${EMPRESAS[empresaKey].name}</span><br><strong>${p.nombre}</strong><br><small style="color:var(--text-secondary);">Click para cargar en Clásico</small>`;
+        d.onclick = () => { 
+          document.getElementById("rol").value = p.rol; updateCounter('rol');
+          document.getElementById("ctx").value = p.ctx; updateCounter('ctx');
+          document.getElementById("tarea").value = p.tarea; updateCounter('tarea');
+          document.getElementById("esp").value = p.esp; updateCounter('esp');
+          document.getElementById("ej").value = p.ej; updateCounter('ej');
+          switchSection('clasico', document.querySelectorAll('.nav-item')[1]);
+        };
+        g.appendChild(d);
+      });
+    }
+    
+    function cargarEjemplosSector() { 
+      renderExamples(document.getElementById("ent_sector").value); 
+    }
+
+    function generarEnterprise() {
+      const k = document.getElementById("apiKey").value;
+      if (!k && !modoLocal) return alert("API Key requerida");
+      
+      let sys = `## ROL\n${document.getElementById("ent_rol").value}\n\n## REGLAS\n${document.getElementById("ent_reglas").value}\n\n## FORMATO\n${document.getElementById("ent_formato").value}`;
+      
+      const neg = document.getElementById("ent_negativas").value;
+      if (neg) sys += `\n\n## RESTRICCIONES NEGATIVAS\n${neg}`;
+      
+      if (document.getElementById("e_cot").checked) {
+        sys += `\n\n## INSTRUCCIÓN DE RAZONAMIENTO\nPiensa paso a paso dentro de etiquetas <thinking> antes de responder.`;
+      }
+      
+      if (document.getElementById("e_verif").checked) {
+        sys += `\n\n## AUTO-VERIFICACIÓN\nAntes de responder, verifica: 1. ¿Cumple el formato JSON? 2. ¿Violaste restricciones negativas? Corrige si es necesario.`;
+      }
+
+      const usr = `TASK: ${document.getElementById("ent_tarea").value}`;
+      
+      fetch(modoLocal ? "http://localhost:11434/api/chat" : "https://api.groq.com/openai/v1/chat/completions", {
+        method: "POST", headers: modoLocal ? {"Content-Type":"application/json"} : {"Authorization":`Bearer ${k}`,"Content-Type":"application/json"},
+        body: JSON.stringify(modoLocal ? { model:"llama3.2", messages:[{role:"system",content:sys},{role:"user",content:usr}], stream:false } : { model:"llama-3.3-70b-versatile", messages:[{role:"system",content:sys},{role:"user",content:usr}], temperature: 0.2 })
+      }).then(r => r.json()).then(d => {
+        const content = modoLocal ? d.message.content : d.choices[0].message.content;
+        if (document.getElementById("e_json").checked) {
+          try { 
+            const cleanJson = content.replace(/```json\n?/g, '').replace(/```\n?/g, '');
+            JSON.parse(cleanJson); 
+            document.getElementById("validationResult").style.background = "var(--success)";
+            document.getElementById("validationResult").style.color = "white";
+            document.getElementById("validationResult").textContent = "✅ JSON Válido y Parseado"; 
+            document.getElementById("validationResult").style.display = "block";
+            ultimoPrompt = cleanJson;
+          } catch (e) { 
+            document.getElementById("validationResult").style.background = "var(--danger)";
+            document.getElementById("validationResult").style.color = "white";
+            document.getElementById("validationResult").textContent = "❌ JSON Inválido: " + e.message; 
+            document.getElementById("validationResult").style.display = "block";
+            ultimoPrompt = content;
+          }
+        } else {
+          ultimoPrompt = content;
+        }
+        document.getElementById("output-enterprise").textContent = ultimoPrompt;
+        document.getElementById("output-enterprise").style.display = "block";
+        promptsGenerados++;
+        document.getElementById('metricPrompts').textContent = promptsGenerados;
+      }).catch(e => alert("Error: " + e.message));
+    }
+
+    function filtrarRentables() {
+      const tipo = document.getElementById("tipoExperto").value;
+      const g = document.getElementById("rentablesGrid"); g.innerHTML = "";
+      let list = Object.entries(PLANTILLAS_RENTABLES);
+      if (tipo) list = list.filter(([k,v]) => v.tipo === tipo);
+      
+      list.forEach(([k, v]) => {
+        const d = document.createElement("div"); d.className = "template-card";
+        const badge = v.ingreso === 'premium' ? '$20K+' : v.ingreso === 'muy_alto' ? '$10K-20K' : '$5K-10K';
+        const badgeColor = v.ingreso === 'premium' ? 'var(--danger)' : v.ingreso === 'muy_alto' ? 'var(--warning)' : 'var(--success)';
+        d.innerHTML = `<span class="tag" style="background:${badgeColor}; color:white;">${badge}</span><br><strong>${k.replace(/_/g,' ').toUpperCase()}</strong><br><small style="color:var(--text-secondary);">${v.rol.substring(0, 80)}...</small>`;
+        d.onclick = () => { 
+          document.getElementById("rol").value = v.rol; updateCounter('rol');
+          document.getElementById("ctx").value = v.ctx; updateCounter('ctx');
+          document.getElementById("tarea").value = v.tarea; updateCounter('tarea');
+          document.getElementById("esp").value = v.esp; updateCounter('esp');
+          switchSection('clasico', document.querySelectorAll('.nav-item')[1]); 
+        };
+        g.appendChild(d);
+      });
+    }
+
+    function filtrarMercado() {
+      const categoria = document.getElementById("categoriaMercado").value;
+      const g = document.getElementById("mercadoGrid"); g.innerHTML = "";
+      
+      let plantillas = [];
+      for (const [cat, items] of Object.entries(PLANTILLAS_MERCADO)) {
+        if (!categoria || cat === categoria) {
+          plantillas = plantillas.concat(items);
+        }
+      }
+      
+      if (plantillas.length === 0) {
+        g.innerHTML = '<p style="color:var(--text-secondary); grid-column: 1/-1;">No hay plantillas disponibles.</p>';
+        return;
+      }
+      
+      plantillas.forEach((p, idx) => {
+        const d = document.createElement("div"); d.className = "template-card";
+        d.innerHTML = `<span class="tag" style="background:var(--success); color:white;">${p.categoria.replace(/_/g, ' ').toUpperCase()}</span><br><strong>${p.nombre}</strong><br><small style="color:var(--text-secondary);">${p.rol.substring(0, 80)}...</small>`;
+        d.onclick = () => {
+          document.getElementById("rol").value = p.rol; updateCounter('rol');
+          document.getElementById("ctx").value = p.ctx; updateCounter('ctx');
+          document.getElementById("tarea").value = p.tarea; updateCounter('tarea');
+          document.getElementById("esp").value = p.esp; updateCounter('esp');
+          document.getElementById("ej").value = p.ej; updateCounter('ej');
+          switchSection('clasico', document.querySelectorAll('.nav-item')[1]);
+        };
+        g.appendChild(d);
+      });
+    }
+
+    function toggleLocalMode() {
+      modoLocal = !modoLocal;
+      document.getElementById("modeBtn").textContent = modoLocal ? "☁️ Modo Cloud" : "🖥️ Modo Local";
+      document.getElementById("apiKey").disabled = modoLocal;
+    }
+
+    function clearApiKey() {
+      localStorage.removeItem("groq_api_key");
+      document.getElementById("apiKey").value = "";
+      document.getElementById("apiStatus").style.display = "none";
+    }
+
+    function copiar() { navigator.clipboard.writeText(ultimoPrompt); alert("✅ Copiado"); }
+    function guardar() {
+      let h = JSON.parse(localStorage.getItem("hist") || "[]");
+      h.unshift({ f: new Date().toLocaleString(), p: ultimoPrompt });
+      localStorage.setItem("hist", JSON.stringify(h.slice(0,10)));
+      loadHistory();
+    }
+    function loadHistory() {
+      const h = JSON.parse(localStorage.getItem("hist") || "[]");
+      const c = document.getElementById("historialList"); c.innerHTML = "";
+      if (h.length === 0) { c.innerHTML = "<p style='color:var(--text-secondary);'>Sin historial aún.</p>"; return; }
+      h.forEach(i => { 
+        const d = document.createElement("div"); 
+        d.className = "history-item"; 
+        d.textContent = i.f; 
+        d.onclick = () => { 
+          ultimoPrompt = i.p; 
+          document.getElementById("output-clasico").textContent = i.p; 
+          document.getElementById("output-clasico").style.display = "block"; 
+        }; 
+        c.appendChild(d); 
+      });
+    }
+    function exportarMD() {
+      const b = new Blob([`# Prompt R-C-T-E-E Pro\n\n${ultimoPrompt}`], {type:"text/markdown"});
+      const a = document.createElement("a"); a.href = URL.createObjectURL(b); a.download = "prompt.md"; a.click();
+    }
+    function exportarConfig() {
+      const config = { historial: JSON.parse(localStorage.getItem("hist") || "[]"), exportado_en: new Date().toISOString() };
+      const b = new Blob([JSON.stringify(config, null, 2)], {type:"application/json"});
+      const a = document.createElement("a"); a.href = URL.createObjectURL(b); a.download = "config.json"; a.click();
+    }
+    function importarConfig(event) {
+      const file = event.target.files[0];
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        try {
+          const data = JSON.parse(e.target.result);
+          if (data.historial) localStorage.setItem("hist", JSON.stringify(data.historial));
+          loadHistory();
+          alert("✅ Configuración importada");
+        } catch (err) { alert("❌ Error: " + err.message); }
+      };
+      reader.readAsText(file);
+    }
+  </script>
+</body>
+</html>
