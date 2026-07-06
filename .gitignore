@@ -9,7 +9,10 @@ out-tsc
 .expo-shared
 
 # dependencies
-node_modules
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
 
 # IDEs and editors
 /.idea
@@ -40,10 +43,35 @@ testem.log
 # System Files
 .DS_Store
 Thumbs.db
+desktop.ini
 
-.cursor/rules/nx-rules.mdc
-.github/instructions/nx.instructions.md
+# API Keys (NUNCA subir)
+*.key
+*.secret
+*.pem
+.env
+.env.local
+.env.production
+config.json
+
+# Build
+build/
+*.min.js
+*.min.css
+
+# Logs
+logs
+*.log
+
+# Temp / backup
+*.tmp
+*.temp
+*.bak
+*.backup
 
 # Replit
 .cache/
 .local/
+
+.cursor/rules/nx-rules.mdc
+.github/instructions/nx.instructions.md
