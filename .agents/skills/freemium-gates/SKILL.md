@@ -1,11 +1,11 @@
 ---
 name: freemium-gates
-description: Implementación del modelo freemium con límites por plan en la plataforma. Úsala al agregar cualquier feature con cuotas, al construir el sistema de upgrades, o cuando necesites verificar si un usuario puede realizar una acción según su plan.
+description: Implementación del modelo freemium con límites por plan en R-C-T-E-E Pro. Úsala al agregar cualquier feature con cuotas, al verificar si un usuario puede usar una plantilla, o al mostrar mensajes de upgrade. Los límites son por número de usos de plantillas y clientes en CRM, no por features bloqueadas.
 ---
 
-# Freemium Gates
+# Freemium Gates — R-C-T-E-E Pro
 
-El modelo freemium limita **recursos cuantificables**, no features. Cada acción que consuma un recurso limitado debe pasar por un gate antes de ejecutarse.
+El modelo limita **cuántas veces** se puede usar la plataforma, no qué features están disponibles. El principio: el usuario SIEMPRE ve todas las plantillas — solo se bloquea al intentar generar el entregable si superó su cuota.
 
 ---
 
@@ -14,34 +14,40 @@ El modelo freemium limita **recursos cuantificables**, no features. Cada acción
 ```typescript
 export const PLAN_LIMITS = {
   free: {
-    projects: 3,
-    agents_per_project: 1,
-    ai_messages_per_month: 500,
-    team_members: 1,
-    integrations: 0,
-    crm_clients: 50,
-    deployments: 1,
-    templates_access: "public_only",
+    templates_access: ["diagnostico_financiero_basic", "cobranza_basic", "bienestar_basic"], // 3 específicas
+    generations_per_month: 2,           // entregables generados
+    clients_in_crm: 5,
+    active_projects: 2,
+    verticals_access: 1,                // solo el vertical que eligió al registrarse
+    white_label: false,
+    share_deliverable: false,           // no puede enviar docs al cliente desde la app
   },
   starter: {
-    projects: 10,
-    agents_per_project: 5,
-    ai_messages_per_month: 5000,
-    team_members: 3,
-    integrations: 3,
-    crm_clients: 500,
-    deployments: 5,
-    templates_access: "all",
+    templates_access: "one_vertical",   // todas las plantillas de 1 vertical
+    generations_per_month: 10,
+    clients_in_crm: 50,
+    active_projects: 10,
+    verticals_access: 1,
+    white_label: false,
+    share_deliverable: true,
   },
   pro: {
-    projects: Infinity,
-    agents_per_project: Infinity,
-    ai_messages_per_month: 50000,
-    team_members: Infinity,
-    integrations: Infinity,
-    crm_clients: Infinity,
-    deployments: Infinity,
+    templates_access: "all",            // todos los verticales (60+ plantillas)
+    generations_per_month: Infinity,
+    clients_in_crm: Infinity,
+    active_projects: Infinity,
+    verticals_access: 7,
+    white_label: false,
+    share_deliverable: true,
+  },
+  agency: {
     templates_access: "all",
+    generations_per_month: Infinity,
+    clients_in_crm: Infinity,
+    active_projects: Infinity,
+    verticals_access: 7,
+    white_label: true,                  // sin marca R-C-T-E-E en los documentos
+    share_deliverable: true,
   },
 } as const;
 
@@ -50,29 +56,84 @@ export type PlanTier = keyof typeof PLAN_LIMITS;
 
 ---
 
-## Patrón del gate (middleware de Express)
+## Contador de generaciones (reset mensual)
 
 ```typescript
-// lib: src/lib/freemium.ts
-import { PLAN_LIMITS } from "./plan-limits";
-import { db } from "@workspace/db";
+// Tabla: usage_counters
+// organization_id | year_month | generations_count | created_at
 
-export async function checkLimit(
-  organizationId: string,
-  resource: keyof typeof PLAN_LIMITS.free,
-  currentCount: number
-): Promise<{ allowed: boolean; limit: number; plan: PlanTier }> {
-  const sub = await db.query.subscriptions.findFirst({
-    where: eq(subscriptions.organizationId, organizationId),
-  });
+async function checkGenerationLimit(orgId: string): Promise<{
+  allowed: boolean;
+  used: number;
+  limit: number;
+  plan: PlanTier;
+}> {
+  const yearMonth = new Date().toISOString().slice(0, 7); // "YYYY-MM"
+  const sub = await getSubscription(orgId);
   const plan = (sub?.plan ?? "free") as PlanTier;
-  const limit = PLAN_LIMITS[plan][resource] as number;
+  const limit = PLAN_LIMITS[plan].generations_per_month;
+
+  const counter = await db.query.usageCounters.findFirst({
+    where: and(
+      eq(usageCounters.organizationId, orgId),
+      eq(usageCounters.yearMonth, yearMonth)
+    ),
+  });
+
+  const used = counter?.generationsCount ?? 0;
 
   return {
-    allowed: currentCount < limit,
-    limit,
+    allowed: limit === Infinity || used < limit,
+    used,
+    limit: limit === Infinity ? -1 : limit,
     plan,
   };
+}
+
+async function incrementGenerationCount(orgId: string): Promise<void> {
+  const yearMonth = new Date().toISOString().slice(0, 7);
+  await db.insert(usageCounters)
+    .values({ organizationId: orgId, yearMonth, generationsCount: 1 })
+    .onConflictDoUpdate({
+      target: [usageCounters.organizationId, usageCounters.yearMonth],
+      set: { generationsCount: sql`${usageCounters.generationsCount} + 1` },
+    });
+}
+```
+
+---
+
+## Verificación de acceso a plantilla
+
+```typescript
+async function canAccessTemplate(
+  orgId: string,
+  templateId: string
+): Promise<{ allowed: boolean; reason?: string }> {
+  const [sub, template] = await Promise.all([
+    getSubscription(orgId),
+    getTemplate(templateId),
+  ]);
+
+  const plan = (sub?.plan ?? "free") as PlanTier;
+  const limits = PLAN_LIMITS[plan];
+
+  // Plan free: solo 3 plantillas específicas
+  if (plan === "free") {
+    const freeTemplates = limits.templates_access as string[];
+    if (!freeTemplates.includes(template.slug)) {
+      return { allowed: false, reason: "template_not_in_free_plan" };
+    }
+  }
+
+  // Plan starter: solo 1 vertical
+  if (plan === "starter") {
+    if (template.vertical !== sub?.selectedVertical) {
+      return { allowed: false, reason: "vertical_not_in_plan" };
+    }
+  }
+
+  return { allowed: true };
 }
 ```
 
@@ -80,82 +141,75 @@ export async function checkLimit(
 
 ## Respuesta estándar cuando se supera un límite
 
-Siempre devolver HTTP **402 Payment Required** con este cuerpo:
+HTTP **402 Payment Required**:
 
 ```json
 {
   "error": "limit_reached",
-  "resource": "projects",
-  "current": 3,
-  "limit": 3,
+  "resource": "generations_per_month",
+  "used": 2,
+  "limit": 2,
   "plan": "free",
-  "upgrade_url": "/settings/billing"
-}
-```
-
-El frontend debe interceptar 402 y mostrar el modal de upgrade automáticamente.
-
----
-
-## Tabla `subscriptions` en DB
-
-```typescript
-// lib/db/src/schema/subscriptions.ts
-export const subscriptions = pgTable("subscriptions", {
-  id: uuid("id").primaryKey().defaultRandom(),
-  organizationId: uuid("organization_id").notNull().unique(),
-  plan: text("plan").notNull().default("free"), // free | starter | pro
-  stripeCustomerId: text("stripe_customer_id"),
-  stripeSubscriptionId: text("stripe_subscription_id"),
-  currentPeriodEnd: timestamp("current_period_end"),
-  status: text("status").notNull().default("active"), // active | past_due | canceled
-  createdAt: timestamp("created_at").defaultNow(),
-  updatedAt: timestamp("updated_at").defaultNow(),
-});
-```
-
----
-
-## Contador de mensajes IA (reset mensual)
-
-```typescript
-// Tabla: ai_usage
-// Columnas: organization_id, year_month (ej: "2024-01"), message_count
-// Incrementar con cada llamada a agente, verificar antes de ejecutar
-
-async function incrementAiUsage(orgId: string): Promise<void> {
-  const yearMonth = new Date().toISOString().slice(0, 7); // "YYYY-MM"
-  await db
-    .insert(aiUsage)
-    .values({ organizationId: orgId, yearMonth, messageCount: 1 })
-    .onConflictDoUpdate({
-      target: [aiUsage.organizationId, aiUsage.yearMonth],
-      set: { messageCount: sql`${aiUsage.messageCount} + 1` },
-    });
+  "reset_date": "2024-02-01",
+  "upgrade_url": "/settings/billing",
+  "message": "Alcanzaste el límite de 2 documentos este mes. Actualiza tu plan para generar más."
 }
 ```
 
 ---
 
-## Modal de upgrade en el frontend
+## Mensajes de upgrade en la UI (tono colombiano / cercano)
 
-- Interceptar HTTP 402 globalmente en el custom-fetch del cliente API
-- Mostrar modal con: recurso bloqueado, plan actual, beneficios del siguiente plan, CTA de upgrade
-- El modal redirige a `/settings/billing` con `?upgrade=true&from=<resource>`
+```typescript
+const UPGRADE_MESSAGES: Record<string, string> = {
+  generations_per_month:
+    "¡Ya usaste tus 2 documentos del mes! Actualiza al plan Starter para generar hasta 10 al mes.",
+  template_not_in_free_plan:
+    "Esta plantilla está disponible desde el plan Starter. ¿Listo para sacarle más provecho a la plataforma?",
+  vertical_not_in_plan:
+    "Tienes acceso al vertical de Cobranza. Para usar plantillas de RRHH, actualiza al plan Pro.",
+  clients_in_crm:
+    "Llegaste al límite de 5 clientes en el plan gratuito. Con Starter puedes gestionar hasta 50.",
+  white_label:
+    "El white label (sin marca de la plataforma en tus documentos) está disponible en el plan Agencia.",
+};
+```
+
+---
+
+## Dónde aplicar los gates (checklist)
+
+- [ ] **Antes de generar un entregable** → verificar `checkGenerationLimit` + `canAccessTemplate`
+- [ ] **Al crear un cliente en CRM** → verificar `clients_in_crm`
+- [ ] **Al crear un proyecto** → verificar `active_projects`
+- [ ] **Al compartir un entregable** → verificar `share_deliverable`
+- [ ] **Al acceder a una plantilla de otro vertical (starter)** → verificar `verticals_access`
+- [ ] **Al generar sin marca (white label)** → verificar plan `agency`
+
+---
+
+## Tabla `subscriptions` (campos relevantes para gates)
+
+```typescript
+// Agregar a la tabla subscriptions:
+selectedVertical: text("selected_vertical"),  // para plan starter: qué vertical eligió
+```
+
+Al registrarse en plan Starter, el usuario elige su vertical principal. Esto determina qué plantillas puede usar.
 
 ---
 
 ## Reglas clave
 
-- Verificar el límite ANTES de crear el recurso, nunca después
-- Los límites se evalúan al momento de la acción, no se cachean en el frontend
-- Plan `free` nunca expira — no hay trial
-- Al hacer downgrade, los recursos existentes que superen el límite quedan en modo "read-only" hasta que el usuario los archive
-- Nunca bloquear el acceso a datos existentes, solo la creación de nuevos
+- El usuario SIEMPRE puede ver todas las plantillas — el lock solo aparece al intentar generar
+- Los contadores de generación se resetean el día 1 de cada mes (UTC-5 Colombia)
+- Al hacer downgrade, los proyectos/clientes existentes quedan en modo "solo lectura"
+- Plan Free nunca expira — no hay trial con fecha límite
+- Incrementar el contador DESPUÉS de que la generación sea exitosa, no antes
 
 ---
 
 ## Referencias
 
-- Ver `platform-monetization` skill para integración con Stripe
-- Ver `platform-architecture` skill para tabla de límites completa
+- Ver `platform-monetization` skill para los precios y el proceso de pago
+- Ver `platform-architecture` skill para la tabla de planes completa

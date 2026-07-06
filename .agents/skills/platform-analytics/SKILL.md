@@ -1,175 +1,231 @@
 ---
 name: platform-analytics
-description: Sistema de analytics y métricas de negocio para la plataforma AI. Úsala al construir el dashboard de métricas, al instrumentar eventos de uso, o al implementar reportes de actividad por organización.
+description: Analytics y métricas de negocio para R-C-T-E-E Pro. Úsala al construir el dashboard de métricas, al instrumentar eventos de uso, o al implementar reportes de actividad. Las métricas core son: documentos generados, ingresos por vertical, conversión freemium→pago, y pipeline de clientes.
 ---
 
-# Platform Analytics
+# Platform Analytics — R-C-T-E-E Pro
 
-Dos capas de analytics: **métricas de plataforma** (qué hacen los usuarios dentro de la plataforma) y **métricas de solución** (qué hacen los clientes finales dentro de las soluciones construidas por los usuarios).
+Dos tipos de métricas: **métricas de plataforma** (qué hacen los consultores/agencias que usan el panel) y **métricas de negocio del consultor** (su pipeline, ingresos, clientes).
 
 ---
 
-## Eventos a instrumentar (tabla `analytics_events`)
+## Eventos a instrumentar
 
 ```typescript
 // Tabla: analytics_events (append-only, nunca UPDATE)
 {
   id: uuid,
   organization_id: uuid,
-  project_id: uuid | null,
-  agent_id: uuid | null,
   event_type: AnalyticsEventType,
-  properties: jsonb,           // datos adicionales del evento
-  user_id: uuid | null,        // usuario de la plataforma (no cliente final)
-  session_id: string | null,
-  ip_country: string | null,   // país (no IP — privacy)
+  properties: jsonb,
+  user_id: uuid | null,
   created_at: timestamp,
 }
-```
 
----
-
-## Tipos de evento (`AnalyticsEventType`)
-
-```typescript
-// Eventos de plataforma
 type AnalyticsEventType =
-  // Proyectos
-  | "project.created"
-  | "project.deployed"
-  | "project.archived"
-  // Agentes IA
-  | "agent.created"
-  | "agent.message_sent"
-  | "agent.error"
+  // Uso de plantillas
+  | "template.viewed"              // vio la descripción de una plantilla
+  | "template.form_started"        // empezó a llenar el formulario
+  | "template.generation_started"  // disparó la generación
+  | "template.generation_completed"// documento generado exitosamente
+  | "template.generation_failed"   // falló la generación
+  | "template.downloaded"          // descargó el documento
+  | "template.shared_with_client"  // envió el doc al cliente pyme
+  // Límites (señales de conversión)
+  | "limit.generations_reached"    // llegó al límite mensual
+  | "limit.template_locked"        // intentó usar plantilla de plan superior
+  | "limit.clients_reached"        // llegó al límite de CRM
   // Monetización
-  | "subscription.upgraded"
-  | "subscription.downgraded"
-  | "subscription.canceled"
-  // Templates
-  | "template.cloned"
-  | "template.published"
-  // CRM
+  | "billing.upgrade_clicked"      // hizo clic en "Actualizar plan"
+  | "billing.checkout_started"     // inició el proceso de pago
+  | "billing.payment_completed"    // pago exitoso
+  | "billing.payment_failed"       // pago fallido
+  // CRM / Pipeline
   | "client.created"
-  | "client.contacted"
-  // Integraciones
-  | "integration.connected"
-  | "integration.webhook_received"
-  // Límites
-  | "limit.reached"            // qué límite se alcanzó (para medir fricción)
+  | "project.created"
+  | "project.stage_advanced"       // el proyecto avanzó de etapa en el pipeline
+  | "deliverable.shared"           // entregable compartido con cliente pyme
+  // Retención
+  | "session.started"              // usuario inició sesión
+  | "vertical.switched"            // cambió de vertical en el panel
 ```
 
 ---
 
-## Helper para registrar eventos
+## Helper de tracking (fire-and-forget)
 
 ```typescript
 // src/lib/analytics.ts
-export async function track(
+export function track(
   event: AnalyticsEventType,
   orgId: string,
   properties: Record<string, unknown> = {},
-  ctx?: { projectId?: string; agentId?: string; userId?: string }
-) {
-  // Fire-and-forget — no bloquear el request
+  userId?: string
+): void {
+  // Sin await — nunca bloquear el flujo principal
   db.insert(analyticsEvents).values({
     organizationId: orgId,
-    projectId: ctx?.projectId ?? null,
-    agentId: ctx?.agentId ?? null,
     eventType: event,
     properties,
-    userId: ctx?.userId ?? null,
-  }).catch((err) => logger.error({ err }, "Failed to track event"));
+    userId: userId ?? null,
+  }).catch(err => logger.error({ err }, "Analytics track failed"));
 }
-
-// Uso en un route handler:
-track("agent.message_sent", req.tenantId, { model: agent.model }, { agentId: agent.id });
 ```
 
 ---
 
-## Métricas del dashboard (queries SQL recomendadas)
+## Dashboard del consultor — métricas clave
 
-### Resumen de la organización (últimos 30 días)
-```sql
--- Mensajes IA enviados
-SELECT COUNT(*) FROM analytics_events
-WHERE organization_id = $1
-  AND event_type = 'agent.message_sent'
-  AND created_at >= NOW() - INTERVAL '30 days';
+```typescript
+// GET /api/analytics/summary?period=30d
+interface AnalyticsSummary {
+  // Producción
+  documents_generated: number;          // este período
+  documents_by_vertical: Record<Vertical, number>;
+  avg_generation_time_seconds: number;
 
--- Proyectos activos
-SELECT COUNT(*) FROM projects
-WHERE organization_id = $1 AND status = 'active';
+  // Negocio
+  revenue_this_month_usd: number;
+  revenue_by_vertical: Record<Vertical, number>;
+  pipeline_value_usd: number;           // suma de proyectos activos
 
--- Clientes en CRM
-SELECT COUNT(*) FROM clients
-WHERE organization_id = $1;
+  // Clientes
+  new_clients: number;
+  clients_by_stage: Record<PipelineStage, number>;
+  avg_deal_size_usd: number;
+
+  // Uso de la plataforma
+  most_used_templates: Array<{ template_name: string; count: number }>;
+  plan: PlanTier;
+  generations_used_this_month: number;
+  generations_limit: number;            // -1 = ilimitado
+}
 ```
 
-### Serie temporal de actividad (para gráficos)
+---
+
+## Métricas de la plataforma (admin interno)
+
+Solo accesible por el equipo de R-C-T-E-E Pro — NO por usuarios normales:
+
+```typescript
+// GET /api/admin/platform-metrics (requiere rol admin de plataforma, no de org)
+interface PlatformMetrics {
+  mrr_usd: number;                      // Monthly Recurring Revenue
+  arr_usd: number;                      // Annualized
+  users_by_plan: Record<PlanTier, number>;
+  free_to_paid_conversion_rate: number; // % de free → cualquier plan pago
+  churn_rate_monthly: number;           // % cancelaciones este mes
+  most_used_verticals: Array<{ vertical: Vertical; count: number }>;
+  top_converting_features: Array<{      // qué features triggean upgrades
+    event: string;
+    upgrade_rate: number;
+  }>;
+  documents_generated_total: number;
+  avg_documents_per_org_monthly: number;
+}
+```
+
+---
+
+## Serie temporal (para gráficos)
+
 ```sql
+-- Documentos generados por día, últimos 30 días
 SELECT
-  DATE_TRUNC('day', created_at) AS day,
-  event_type,
+  DATE_TRUNC('day', created_at AT TIME ZONE 'America/Bogota') AS day,
   COUNT(*) AS count
 FROM analytics_events
 WHERE organization_id = $1
+  AND event_type = 'template.generation_completed'
   AND created_at >= NOW() - INTERVAL '30 days'
-GROUP BY 1, 2
+GROUP BY 1
 ORDER BY 1;
 ```
 
 ---
 
-## Endpoints del dashboard
+## Embudo de conversión (métrica clave para el negocio)
+
+Traquear el embudo completo por plantilla:
 
 ```
-GET /api/analytics/summary          → métricas clave del período
-GET /api/analytics/timeseries       → serie temporal por evento
-GET /api/analytics/agents           → uso por agente
-GET /api/analytics/projects         → actividad por proyecto
-GET /api/analytics/limits           → cuántas veces se alcanzaron límites (conversión)
+template.viewed → form_started → generation_started → generation_completed → downloaded → shared_with_client
 ```
 
-Todos requieren `?from=YYYY-MM-DD&to=YYYY-MM-DD` como parámetros opcionales (default: últimos 30 días).
+```sql
+-- Tasa de conversión por etapa del embudo
+SELECT
+  event_type,
+  COUNT(DISTINCT organization_id) AS orgs,
+  COUNT(*) AS events
+FROM analytics_events
+WHERE event_type IN (
+  'template.viewed', 'template.form_started',
+  'template.generation_started', 'template.generation_completed',
+  'template.downloaded', 'template.shared_with_client'
+)
+  AND created_at >= NOW() - INTERVAL '30 days'
+GROUP BY 1
+ORDER BY 2 DESC;
+```
 
 ---
 
-## Métricas de negocio clave (para el dueño de la plataforma)
+## Métricas de conversión freemium → pago
 
-Para el panel de administración interno (no accesible por usuarios normales):
+```sql
+-- ¿Qué feature triggeó más upgrades? (señal de valor real)
+SELECT
+  properties->>'resource' AS blocked_resource,
+  COUNT(*) AS times_blocked,
+  COUNT(*) FILTER (WHERE event_type = 'billing.upgrade_clicked') AS upgrades
+FROM analytics_events
+WHERE event_type IN ('limit.generations_reached', 'limit.template_locked', 'billing.upgrade_clicked')
+  AND created_at >= NOW() - INTERVAL '30 days'
+GROUP BY 1
+ORDER BY 2 DESC;
+```
 
-| Métrica | Query |
-|---|---|
-| MRR | SUM de suscripciones activas |
-| Churn mensual | Cancelaciones / total activos inicio del mes |
-| Activación | % orgs con ≥1 proyecto desplegado en primeros 7 días |
-| Conversión free→paid | Upgrades / total orgs free |
-| Feature más bloqueada | event_type = 'limit.reached' GROUP BY properties->>'resource' |
+---
+
+## Endpoints
+
+```
+GET /api/analytics/summary            → métricas clave del período (dashboard consultor)
+GET /api/analytics/timeseries         → serie temporal de documentos generados
+GET /api/analytics/funnel             → embudo por plantilla
+GET /api/analytics/pipeline           → métricas del pipeline de clientes
+GET /api/admin/platform-metrics       → métricas globales (solo admin de plataforma)
+```
+
+Parámetros opcionales: `?period=7d|30d|90d` (default: 30d), `?vertical=reintegra_ai`.
 
 ---
 
 ## Retención de datos
 
-- Eventos de analytics: retener 12 meses en tabla caliente
-- Datos más antiguos: agregar a tabla mensual y eliminar raw (reducir costos de DB)
-- Plan Free: solo 30 días de historial visible en el dashboard
-- Plan Starter/Pro: 12 meses de historial visible
+| Plan | Historial visible |
+|---|---|
+| Free | 7 días |
+| Starter | 90 días |
+| Pro / Agency | 12 meses |
+
+Los datos raw se retienen 12 meses en la tabla caliente. Datos más antiguos se agregan a tabla mensual y se eliminan del raw.
 
 ---
 
 ## Reglas clave
 
-- Los eventos son **append-only** — nunca UPDATE ni DELETE en `analytics_events`
-- `track()` es fire-and-forget — nunca `await` en el flujo principal
-- No guardar IPs completas — solo país (`ip_country`) para privacidad
-- Separar analytics de la plataforma de analytics de las soluciones desplegadas (tablas distintas)
+- `track()` es SIEMPRE fire-and-forget — nunca `await` en el flujo principal del request
+- Los eventos son append-only — nunca UPDATE ni DELETE en `analytics_events`
+- El dashboard admin de plataforma (`/api/admin/*`) requiere validación explícita de rol de plataforma, separada de los roles de organización de Clerk
+- El evento `limit.generations_reached` es la señal más valiosa de intención de compra — trackear con máxima prioridad
 
 ---
 
 ## Referencias
 
-- Ver `platform-architecture` skill para estructura de datos completa
-- Ver `multi-tenancy` skill para filtrar correctamente por organización
-- Ver `freemium-gates` skill para los límites de historial por plan
+- Ver `pyme-crm` skill para métricas de pipeline y revenue
+- Ver `freemium-gates` skill para los eventos de límite
+- Ver `multi-tenancy` skill para filtrar analytics por organización

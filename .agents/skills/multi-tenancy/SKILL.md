@@ -1,38 +1,38 @@
 ---
 name: multi-tenancy
-description: Patrones de aislamiento de datos multi-tenant para la plataforma. Úsala al crear cualquier tabla nueva en la DB, al escribir queries, o al agregar middleware de autenticación. Previene filtraciones de datos entre organizaciones.
+description: Patrones de aislamiento de datos multi-tenant para R-C-T-E-E Pro. Úsala al crear cualquier tabla nueva, al escribir queries, o al agregar middleware. Cada "tenant" es un consultor o agencia que usa la plataforma — sus clientes (pymes), entregables y plantillas personalizadas no deben ser visibles entre tenants.
 ---
 
-# Multi-Tenancy
+# Multi-Tenancy — R-C-T-E-E Pro
 
-Toda la plataforma usa **tenancy por columna**: cada tabla de negocio incluye `organization_id` y todas las queries lo filtran obligatoriamente. No hay schemas separados por tenant.
+Cada organización en la plataforma es un tenant aislado: un consultor, agencia o empresa que tiene sus propios clientes pyme, proyectos, entregables e integraciones. **Ninguna query de negocio puede ejecutarse sin filtrar por `organization_id`.**
 
 ---
 
 ## Regla de oro
 
-> **Ninguna query de negocio puede ejecutarse sin filtrar por `organization_id`.**
-
-Si una query no tiene `.where(eq(table.organizationId, orgId))`, es un bug de seguridad.
+> **Si una query no filtra por `organization_id`, es un bug de seguridad.**
 
 ---
 
-## Middleware de tenant (Express)
+## Fuente de verdad del tenant: Clerk Organizations
 
 ```typescript
 // src/middlewares/tenant.ts
-import { clerkMiddleware, getAuth } from "@clerk/express";
+import { getAuth } from "@clerk/express";
 
-export async function resolveTenant(req: Request, res: Response, next: NextFunction) {
+export function resolveTenant(req: Request, res: Response, next: NextFunction) {
   const { orgId, userId } = getAuth(req);
 
   if (!orgId) {
-    return res.status(403).json({ error: "no_organization", message: "Select an organization first" });
+    return res.status(403).json({
+      error: "no_organization",
+      message: "Debes seleccionar una organización para continuar.",
+    });
   }
 
-  // Adjuntar al request para uso en handlers
   req.tenantId = orgId;
-  req.userId = userId;
+  req.userId = userId!;
   next();
 }
 
@@ -47,23 +47,28 @@ declare global {
 }
 ```
 
-Aplicar este middleware a **todas** las rutas protegidas, antes de los handlers.
+Aplicar **antes** de todos los handlers protegidos. Las rutas públicas (`/api/webhooks/*`, `/s/:slug`) NO llevan este middleware.
 
 ---
 
-## Patrón de query segura (Drizzle)
+## Patrón de query segura (Drizzle + Supabase)
 
 ```typescript
-// ✅ CORRECTO — siempre filtrar por tenantId
-async function getProjects(tenantId: string) {
-  return db.query.projects.findMany({
-    where: eq(projects.organizationId, tenantId),
+// ✅ CORRECTO
+async function getClientDeliverables(tenantId: string, clientId: string) {
+  return db.query.deliverables.findMany({
+    where: and(
+      eq(deliverables.organizationId, tenantId),
+      eq(deliverables.clientId, clientId)
+    ),
   });
 }
 
-// ❌ INCORRECTO — expone datos de todos los tenants
-async function getProjects() {
-  return db.query.projects.findMany(); // BUG DE SEGURIDAD
+// ❌ INCORRECTO — expone entregables de todos los tenants
+async function getClientDeliverables(clientId: string) {
+  return db.query.deliverables.findMany({
+    where: eq(deliverables.clientId, clientId),
+  });
 }
 ```
 
@@ -72,64 +77,96 @@ async function getProjects() {
 ## Schema base para toda tabla de negocio
 
 ```typescript
-// Todas las tablas de negocio DEBEN incluir estos campos
-import { pgTable, uuid, timestamp } from "drizzle-orm/pg-core";
-
+// Todas las tablas de negocio DEBEN tener organization_id
 const tenantFields = {
   id: uuid("id").primaryKey().defaultRandom(),
-  organizationId: uuid("organization_id").notNull(),  // FK implícita al tenant
+  organizationId: text("organization_id").notNull(), // Clerk org ID (texto, no uuid)
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 };
 
-// Índice obligatorio en organization_id para performance
-// CREATE INDEX idx_<table>_org ON <table>(organization_id);
+// NOTA: Clerk usa strings como "org_2abc123..." para los IDs de organización
+// NO usar uuid para organization_id — usar text
+```
+
+**Índice obligatorio en organization_id en cada tabla:**
+```sql
+CREATE INDEX idx_{table}_org_id ON {table}(organization_id);
 ```
 
 ---
 
-## Tablas que NO llevan organization_id
+## Tablas y su tenancy
 
-Solo las tablas de sistema/plataforma:
-- `subscriptions` — lleva `organization_id` pero es una tabla de plataforma
-- `plan_limits` — tabla estática de configuración
-- `public_templates` — plantillas públicas del marketplace
+| Tabla | Tiene org_id | Notas |
+|---|---|---|
+| `clients` | ✅ | pymes del consultor |
+| `client_projects` | ✅ | proyectos por cliente |
+| `deliverables` | ✅ | documentos generados |
+| `generation_jobs` | ✅ | jobs de generación |
+| `integrations` | ✅ | WhatsApp, Drive, etc. |
+| `subscriptions` | ✅ | plan del tenant |
+| `analytics_events` | ✅ | eventos de uso |
+| `usage_counters` | ✅ | contador de generaciones |
+| `templates` (platform) | ❌ | plantillas globales de la plataforma, acceso controlado por plan |
+| `templates` (custom) | ✅ | plantillas personalizadas del consultor |
 
 ---
 
-## Aislamiento en uploads / archivos
+## Aislamiento en Supabase Storage
 
-- Los archivos de cada org se guardan bajo el prefijo `/<organization_id>/` en object storage
-- Nunca exponer URLs directas con paths de otros tenants
-- Al generar URLs firmadas, validar que `organization_id` del archivo coincide con el del request
+Los archivos de cada tenant van bajo su propio prefijo:
+
+```
+Bucket: "deliverables"
+Path: {organization_id}/{client_id}/{deliverable_id}.{ext}
+
+Bucket: "template-previews"
+Path: public/{template_id}_preview.pdf  ← público, no requiere org
+```
+
+Al generar URLs firmadas, **siempre validar** que el `organization_id` del archivo coincide con el `tenantId` del request antes de devolver la URL.
 
 ---
 
 ## Checklist al crear una tabla nueva
 
-- [ ] ¿Incluye `organization_id uuid NOT NULL`?
+- [ ] ¿Incluye `organization_id text NOT NULL`?
 - [ ] ¿Tiene índice en `organization_id`?
-- [ ] ¿Todas las queries filtran por `organization_id`?
-- [ ] ¿El endpoint que la expone usa el middleware `resolveTenant`?
-- [ ] ¿El test verifica que org A no puede leer datos de org B?
+- [ ] ¿Todas las queries en el código filtran por `organization_id`?
+- [ ] ¿Los endpoints que la exponen usan el middleware `resolveTenant`?
+- [ ] ¿Los archivos relacionados en Storage usan el path `{org_id}/...`?
 
 ---
 
-## Test de aislamiento (escribir para cada recurso nuevo)
+## Test de aislamiento (obligatorio para cada recurso nuevo)
 
 ```typescript
-it("should not expose data across organizations", async () => {
-  const org1Data = await createTestData(org1Id);
+it("tenant A no puede ver datos de tenant B", async () => {
+  const clientA = await createTestClient(tenantA);
+
   const response = await request(app)
-    .get(`/api/resource/${org1Data.id}`)
-    .set("x-org-id", org2Id); // org diferente
-  expect(response.status).toBe(404); // no 403, para no revelar existencia
+    .get(`/api/clients/${clientA.id}`)
+    .set("Authorization", `Bearer ${tokenTenantB}`);
+
+  // 404, no 403 — no revelar si el recurso existe
+  expect(response.status).toBe(404);
 });
 ```
 
 ---
 
+## Reglas clave
+
+- `organization_id` en esta plataforma es el Clerk Org ID (string como `"org_2abc..."`) — **no es un UUID de Postgres**
+- Los endpoints públicos (`/api/webhooks/*`) nunca acceden a datos de tenant sin validación explícita del token del webhook
+- Las plantillas de la plataforma (`is_platform_template: true`) no tienen `organization_id` — el acceso se controla por plan en `freemium-gates`
+- Al responder 404 (no 403) cuando un tenant intenta acceder a datos de otro, evitamos revelar la existencia del recurso
+
+---
+
 ## Referencias
 
-- Ver `platform-architecture` skill para estructura de datos completa
-- Ver `clerk-auth` skill para extracción de `orgId` desde el token
+- Ver `platform-architecture` skill para la estructura de datos completa
+- Ver `freemium-gates` skill para control de acceso a plantillas por plan
+- Leer `.local/skills/clerk-auth/SKILL.md` para setup de Clerk y extracción del `orgId`

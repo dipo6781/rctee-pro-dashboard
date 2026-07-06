@@ -1,65 +1,255 @@
 ---
 name: solution-deploy-flow
-description: Flujo completo de deploy y publicación de soluciones construidas por usuarios en la plataforma. Úsala al construir el módulo de deploy, al implementar la publicación de proyectos, o al gestionar versiones y dominios de soluciones.
+description: Flujo de entrega de entregables en R-C-T-E-E Pro. Úsala al construir el pipeline de generación y descarga de documentos, al implementar el envío de entregables al cliente pyme, o al gestionar el historial de documentos generados. NOTA: en esta plataforma "deploy" = entregar un PDF/Word/Excel profesional al cliente, no publicar una app.
 ---
 
-# Solution Deploy Flow
+# Solution Deploy Flow — R-C-T-E-E Pro
 
-Cada proyecto construido en la plataforma puede ser "desplegado" para que los clientes finales del usuario accedan a él. El deploy genera una URL pública con la interfaz de la solución (chatbot, formulario, app ligera, etc.).
+En R-C-T-E-E Pro, "publicar una solución" significa **entregar un documento profesional (PDF/Word/Excel) al cliente pyme**. No hay apps que desplegar — el entregable ES el producto.
 
 ---
 
-## Modelo de datos
+## Flujo completo de entrega
+
+```
+1. Consultor selecciona plantilla y cliente
+2. Completa formulario con datos de la pyme
+3. Sistema valida datos y límites del plan (freemium-gates)
+4. Se crea un `deliverable` en status "queued" → respuesta inmediata al usuario
+5. Job worker toma el deliverable y:
+   a. Construye prompt R-C-T-E-E (rcte-methodology)
+   b. Llama a Groq API para generar contenido (~30-90s)
+   c. Valida el output (secciones mínimas, longitud)
+   d. Genera el archivo (PDF via Puppeteer / Word via docxtemplater / Excel via exceljs)
+   e. Sube el archivo a Supabase Storage
+   f. Actualiza deliverable a status "completed" con file_url
+6. Frontend detecta el cambio (polling o realtime) → muestra botón de descarga
+7. Consultor descarga o envía directamente al cliente
+```
+
+---
+
+## Generación del archivo (por formato)
+
+### PDF — Puppeteer + plantilla HTML de marca
 
 ```typescript
-// Tabla: deployments
-{
-  id: uuid,
-  organization_id: uuid,
-  project_id: uuid,
-  version: integer,                  // autoincremental por proyecto
-  slug: string,                      // URL única de la solución
-  custom_domain: string | null,      // dominio personalizado (plan Pro)
-  status: DeploymentStatus,
-  snapshot_hash: string,             // hash del snapshot para detectar cambios
-  config: jsonb,                     // configuración de la solución publicada
-  published_at: timestamp | null,
-  created_by: uuid,
-  created_at, updated_at
+// Cada vertical tiene su plantilla HTML con colores y logo de marca
+// El contenido de la IA se inyecta en los slots de la plantilla
+
+async function generatePDF(
+  content: GeneratedContent,
+  template: Template,
+  client: Client
+): Promise<Buffer> {
+  const html = renderDeliverableHTML({
+    content,
+    brand: VERTICAL_BRANDS[template.vertical],  // colores, logo, tipografía del vertical
+    client,
+    generatedAt: new Date(),
+  });
+
+  const browser = await puppeteer.launch({
+    headless: true,
+    args: ["--no-sandbox", "--disable-setuid-sandbox"],
+  });
+  const page = await browser.newPage();
+  await page.setContent(html, { waitUntil: "networkidle0" });
+  const pdf = await page.pdf({
+    format: "A4",
+    printBackground: true,
+    margin: { top: "20mm", bottom: "20mm", left: "15mm", right: "15mm" },
+  });
+  await browser.close();
+  return pdf;
+}
+```
+
+### Word — docxtemplater con plantilla .docx base
+
+```typescript
+// Cada vertical tiene su archivo .docx base con estilos de marca
+// Variables {{like_this}} en el .docx son reemplazadas con el contenido generado
+
+async function generateWord(
+  content: GeneratedContent,
+  templateDocxPath: string
+): Promise<Buffer> {
+  const templateBuffer = await fs.readFile(templateDocxPath);
+  const zip = new PizZip(templateBuffer);
+  const doc = new Docxtemplater(zip, { paragraphLoop: true });
+
+  doc.setData({
+    company_name: content.client.companyName,
+    date: formatDate(new Date()),
+    ...content.sections,  // secciones mapeadas a variables del template .docx
+  });
+
+  doc.render();
+  return doc.getZip().generate({ type: "nodebuffer" });
+}
+```
+
+### Excel — exceljs con estructura por plantilla
+
+```typescript
+async function generateExcel(
+  content: GeneratedContent,
+  template: Template
+): Promise<Buffer> {
+  const workbook = new ExcelJS.Workbook();
+  // Cada plantilla Excel tiene su propia función de construcción
+  const builder = EXCEL_BUILDERS[template.slug];
+  await builder(workbook, content);
+
+  const buffer = await workbook.xlsx.writeBuffer();
+  return Buffer.from(buffer);
+}
+```
+
+---
+
+## Almacenamiento en Supabase Storage
+
+```typescript
+// Bucket: "deliverables" — privado (no acceso público)
+// Path: {organization_id}/{client_id}/{deliverable_id}.{ext}
+
+async function uploadDeliverable(
+  buffer: Buffer,
+  orgId: string,
+  clientId: string,
+  deliverableId: string,
+  format: "pdf" | "docx" | "xlsx"
+): Promise<string> {
+  const path = `${orgId}/${clientId}/${deliverableId}.${format}`;
+
+  const { error } = await supabase.storage
+    .from("deliverables")
+    .upload(path, buffer, {
+      contentType: FORMAT_MIME_TYPES[format],
+      upsert: false,
+    });
+
+  if (error) throw error;
+  return path; // guardar en DB, no la URL directa
 }
 
-type DeploymentStatus =
-  | "draft"        // en construcción, no accesible públicamente
-  | "building"     // proceso de deploy en curso
-  | "live"         // activo y accesible
-  | "paused"       // temporalmente inaccesible
-  | "archived"     // versión anterior, reemplazada
+// Generar URL firmada (válida 7 días para descargas del consultor)
+async function getDownloadUrl(storagePath: string): Promise<string> {
+  const { data } = await supabase.storage
+    .from("deliverables")
+    .createSignedUrl(storagePath, 60 * 60 * 24 * 7);
+  return data!.signedUrl;
+}
+
+// URL de más larga duración para compartir con el cliente (30 días)
+async function getClientShareUrl(storagePath: string): Promise<string> {
+  const { data } = await supabase.storage
+    .from("deliverables")
+    .createSignedUrl(storagePath, 60 * 60 * 24 * 30);
+  return data!.signedUrl;
+}
 ```
 
 ---
 
-## URL de acceso público
+## Worker de generación (polling sobre Supabase)
 
-Las soluciones desplegadas son accesibles en:
-- **Default:** `https://<plataforma>.replit.app/s/<slug>`
-- **Dominio personalizado (Pro):** `https://<custom-domain>` vía CNAME
+Para el MVP sin Redis, usar polling sobre la tabla `generation_jobs`:
 
-El slug se genera automáticamente desde el nombre del proyecto (kebab-case + sufijo aleatorio) pero el usuario puede personalizarlo.
+```typescript
+// Cron cada 10 segundos — toma el siguiente job en cola y lo procesa
+async function processNextJob(): Promise<void> {
+  const job = await db.query.generationJobs.findFirst({
+    where: eq(generationJobs.status, "queued"),
+    orderBy: asc(generationJobs.createdAt),
+  });
+
+  if (!job) return;
+
+  // Marcar como "processing" (evita doble procesamiento)
+  await db.update(generationJobs)
+    .set({ status: "processing", startedAt: new Date() })
+    .where(and(
+      eq(generationJobs.id, job.id),
+      eq(generationJobs.status, "queued") // condition race-safe
+    ));
+
+  try {
+    const { systemPrompt, userContent } = buildRCTEEPrompt(job.template, job.inputs);
+    const content = await generateWithGroq(systemPrompt, userContent);
+    const validated = validateOutput(content, job.template);
+
+    if (!validated.valid) throw new Error(`Invalid output: ${validated.reason}`);
+
+    const buffer = await generateDocument(content, job.template, job.client);
+    const storagePath = await uploadDeliverable(buffer, job.organizationId, job.clientId, job.deliverableId, job.outputFormat);
+
+    await db.update(deliverables).set({
+      fileUrl: storagePath,
+      generatedContent: content,
+      generationStatus: "completed",
+    }).where(eq(deliverables.id, job.deliverableId));
+
+    await db.update(generationJobs).set({
+      status: "completed",
+      completedAt: new Date(),
+    }).where(eq(generationJobs.id, job.id));
+
+    await incrementGenerationCount(job.organizationId);
+
+  } catch (err) {
+    const attempts = job.attempts + 1;
+    await db.update(generationJobs).set({
+      status: attempts >= 3 ? "failed" : "queued",
+      attempts,
+      error: String(err),
+    }).where(eq(generationJobs.id, job.id));
+  }
+}
+```
 
 ---
 
-## Flujo de deploy
+## Polling del frontend (sin WebSockets para MVP)
 
+```typescript
+// El frontend hace polling cada 3 segundos hasta que el status cambia
+async function pollDeliverableStatus(deliverableId: string): Promise<Deliverable> {
+  while (true) {
+    const res = await fetch(`/api/deliverables/${deliverableId}/status`);
+    const { status, fileUrl } = await res.json();
+
+    if (status === "completed" || status === "failed") {
+      return { status, fileUrl };
+    }
+
+    await new Promise(resolve => setTimeout(resolve, 3000));
+  }
+}
 ```
-1. Usuario clic "Publicar"
-2. Sistema verifica:
-   - ¿Tiene cupo de deployments según su plan? (freemium-gates)
-   - ¿Tiene al menos un agente activo en el proyecto?
-3. Crear registro en `deployments` con status "building"
-4. Generar snapshot del proyecto (igual que templates — sin credenciales)
-5. Configurar la ruta pública `/s/<slug>`
-6. Actualizar deployment status a "live"
-7. Devolver URL pública al usuario
+
+---
+
+## Identidad visual por vertical (branding en los documentos)
+
+```typescript
+const VERTICAL_BRANDS = {
+  reintegra_ai: {
+    primaryColor: "#1B4F72",     // azul marino financiero
+    accentColor: "#F39C12",      // dorado
+    logo: "/assets/reintegra-logo.png",
+    footerText: "Reintegra AI — Consultoría Financiera Especializada",
+  },
+  kineticorp_bienestar: {
+    primaryColor: "#196F3D",     // verde bienestar
+    accentColor: "#A9DFBF",
+    logo: "/assets/kineticorp-logo.png",
+    footerText: "Kineticorp Bienestar — Soluciones de RRHH",
+  },
+  // ... un objeto por cada vertical
+};
 ```
 
 ---
@@ -67,100 +257,28 @@ El slug se genera automáticamente desde el nombre del proyecto (kebab-case + su
 ## Endpoints
 
 ```
-POST /api/projects/:id/deploy           → iniciar deploy del proyecto
-GET  /api/projects/:id/deployments      → historial de deployments
-PUT  /api/deployments/:id/pause         → pausar deployment activo
-PUT  /api/deployments/:id/resume        → reanudar deployment pausado
-DELETE /api/deployments/:id             → archivar deployment
-POST /api/deployments/:id/custom-domain → configurar dominio personalizado (Pro)
-
-GET  /s/:slug                           → interfaz pública de la solución (SIN auth)
-POST /s/:slug/chat                      → endpoint del chatbot público (SIN auth interna)
+POST /api/deliverables                  → crear job de generación (respuesta inmediata)
+GET  /api/deliverables/:id/status       → estado del job (para polling)
+GET  /api/deliverables/:id/download     → generar URL firmada de descarga
+POST /api/deliverables/:id/share        → generar URL de 30 días para el cliente
+GET  /api/projects/:id/deliverables     → todos los entregables de un proyecto
 ```
-
----
-
-## Interfaz pública de la solución (`/s/:slug`)
-
-La interfaz pública es una página React ligera (no el panel completo) que carga la configuración del deployment y renderiza el tipo de solución correspondiente:
-
-```typescript
-// Tipos de interfaz pública según el tipo de proyecto
-type PublicInterface =
-  | "chat_widget"     // chatbot embebible o página completa
-  | "form"            // formulario conversacional
-  | "landing"         // página de captura con chatbot
-  | "dashboard_view"  // vista de métricas (solo lectura, para clientes finales)
-```
-
-La interfaz pública nunca expone credenciales ni configuración interna del agente.
-
----
-
-## Rate limiting para soluciones públicas
-
-```typescript
-// Limitar mensajes por IP para soluciones públicas (evitar abuso)
-// Usar un contador en memoria o Redis con ventana deslizante
-
-const PUBLIC_RATE_LIMIT = {
-  requests_per_minute: 20,      // por IP
-  requests_per_hour: 200,       // por IP
-  daily_org_budget: "from_plan" // usa el límite mensual del plan del dueño
-};
-```
-
----
-
-## Límites por plan
-
-| Plan | Deployments activos | Custom domain |
-|---|---|---|
-| Free | 1 | No |
-| Starter | 5 | No |
-| Pro | Ilimitados | Sí |
-
----
-
-## Widget embebible
-
-Para que los usuarios puedan incrustar la solución en su propio sitio web:
-
-```html
-<!-- Código que la plataforma genera para el usuario -->
-<script src="https://<plataforma>.replit.app/embed.js" 
-        data-slug="<slug>" 
-        data-theme="light">
-</script>
-```
-
-El script inyecta un iframe o un chat widget flotante configurado con el slug del deployment.
 
 ---
 
 ## Reglas clave
 
-- La ruta `/s/:slug` y `/s/:slug/chat` son públicas — SIN autenticación de la plataforma
-- El agente que se ejecuta en la solución pública usa las credenciales de la org dueña (no del visitante)
-- Los mensajes enviados desde soluciones públicas sí cuentan para el límite mensual de IA del plan del dueño
-- Al pausar un deployment, la URL devuelve una página de "temporalmente inactivo" (no 404)
-- Nunca reutilizar un slug archivado — marcar como `archived` y dejar reservado
-
----
-
-## Métricas de la solución desplegada
-
-Registrar en `analytics_events` con `project_id`:
-- `deployment.view` — visita a la URL pública
-- `deployment.chat_message` — mensaje enviado en el chatbot público
-- `deployment.form_submitted` — formulario completado
-- `deployment.widget_loaded` — widget embebido cargado en sitio externo
+- La generación es **siempre asíncrona** — nunca bloquear el HTTP request
+- Guardar `generated_content` (texto crudo) siempre — permite regenerar el formato sin re-llamar a Groq
+- Las URLs de storage son **firmadas con expiración**, nunca públicas permanentes
+- Máximo 3 reintentos por job antes de marcar como "failed" y notificar al usuario
+- El white label (sin logo/marca del vertical) solo está disponible en plan Agency
 
 ---
 
 ## Referencias
 
-- Ver `platform-architecture` skill para estructura de datos completa
-- Ver `freemium-gates` skill para límites de deployments por plan
-- Ver `ai-agent-config` skill para ejecución de agentes en modo público
-- Ver `platform-analytics` skill para métricas de soluciones desplegadas
+- Ver `rcte-methodology` skill para la construcción del prompt
+- Ver `ai-agent-config` skill para la llamada a Groq y validación del output
+- Ver `pyme-crm` skill para la relación proyecto → entregable → cliente
+- Ver `freemium-gates` skill para verificar límites antes de crear el job

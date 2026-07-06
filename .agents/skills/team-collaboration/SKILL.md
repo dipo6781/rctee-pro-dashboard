@@ -1,28 +1,28 @@
 ---
 name: team-collaboration
-description: Gestión de equipos, roles y permisos dentro de la plataforma. Úsala al construir el módulo de equipo, al implementar invitaciones, roles de acceso, o al controlar qué acciones puede realizar cada miembro de una organización.
+description: Gestión de equipos y roles en R-C-T-E-E Pro. Úsala al construir el módulo de equipo, al implementar invitaciones, roles de acceso, o al controlar qué acciones puede realizar cada miembro. El "equipo" es el grupo de consultores/asistentes dentro de una agencia o firma consultora.
 ---
 
-# Team Collaboration
+# Team Collaboration — R-C-T-E-E Pro
 
-Cada organización puede tener múltiples miembros con roles distintos. La gestión de membresías usa Clerk Organizations como fuente de verdad — no reimplementar lógica de invitación/roles en la DB.
+Cada organización puede tener múltiples consultores trabajando juntos. La gestión de membresías usa **Clerk Organizations** como fuente de verdad. No reimplementar invitaciones ni manejo de tokens en la plataforma.
 
 ---
 
-## Roles del equipo
+## Roles
 
 ```typescript
 type OrgRole =
-  | "org:admin"    // Dueño/admin — acceso total, gestión de billing y equipo
-  | "org:member"   // Miembro — acceso a proyectos asignados
-  | "org:viewer"   // Solo lectura — puede ver pero no editar ni publicar
+  | "org:admin"     // Dueño de la firma/agencia — acceso total, billing, configuración
+  | "org:member"    // Consultor — puede crear clientes, proyectos y generar entregables
+  | "org:viewer"    // Asistente — solo puede ver proyectos y descargar entregables existentes
 ```
 
-Los roles son definidos en Clerk y reflejados en el token JWT del usuario. Leer `.local/skills/clerk-auth/SKILL.md` para setup de organizaciones.
+Los roles vienen en el JWT de Clerk. Leer `.local/skills/clerk-auth/SKILL.md` para extracción correcta.
 
 ---
 
-## Middleware de autorización por rol
+## Middleware de autorización
 
 ```typescript
 // src/middlewares/authorize.ts
@@ -44,9 +44,10 @@ export function requireRole(...roles: OrgRole[]) {
 }
 
 // Uso en rutas:
-router.post("/projects", requireRole("org:admin", "org:member"), createProject);
-router.delete("/projects/:id", requireRole("org:admin"), deleteProject);
-router.get("/projects", requireRole("org:admin", "org:member", "org:viewer"), listProjects);
+router.post("/clients",              requireRole("org:admin", "org:member"), createClient);
+router.post("/deliverables/generate",requireRole("org:admin", "org:member"), generateDeliverable);
+router.delete("/clients/:id",        requireRole("org:admin"),               deleteClient);
+router.get("/analytics/summary",     requireRole("org:admin", "org:member", "org:viewer"), getAnalytics);
 ```
 
 ---
@@ -55,105 +56,107 @@ router.get("/projects", requireRole("org:admin", "org:member", "org:viewer"), li
 
 | Acción | Admin | Member | Viewer |
 |---|---|---|---|
-| Ver proyectos | ✅ | ✅ | ✅ |
-| Crear/editar proyectos | ✅ | ✅ | ❌ |
-| Eliminar proyectos | ✅ | ❌ | ❌ |
-| Publicar soluciones | ✅ | ✅ | ❌ |
-| Ver CRM | ✅ | ✅ | ✅ |
+| Ver clientes y proyectos | ✅ | ✅ | ✅ |
 | Crear/editar clientes | ✅ | ✅ | ❌ |
-| Exportar datos | ✅ | ✅ | ❌ |
-| Gestionar integraciones | ✅ | ✅ | ❌ |
+| Generar entregables | ✅ | ✅ | ❌ |
+| Descargar entregables | ✅ | ✅ | ✅ |
+| Compartir entregable por WhatsApp | ✅ | ✅ | ❌ |
+| Ver analytics | ✅ | ✅ | ✅ |
+| Configurar integraciones (WhatsApp, etc.) | ✅ | ❌ | ❌ |
 | Invitar miembros | ✅ | ❌ | ❌ |
 | Cambiar roles | ✅ | ❌ | ❌ |
-| Gestionar billing | ✅ | ❌ | ❌ |
-| Ver analytics | ✅ | ✅ | ✅ |
+| Gestionar billing / plan | ✅ | ❌ | ❌ |
+| Eliminar clientes / proyectos | ✅ | ❌ | ❌ |
 
 ---
 
 ## Invitaciones (delegadas a Clerk)
 
-Clerk maneja el flujo de invitación por email. En la plataforma solo necesitas:
-
 ```typescript
-// Mostrar el estado del equipo (datos de Clerk)
-GET /api/team/members     → listar miembros de la org con sus roles
-GET /api/team/invitations → listar invitaciones pendientes
-
 // Las invitaciones se envían desde el frontend usando el SDK de Clerk:
-// organization.inviteMember({ emailAddress, role })
-// No crear endpoints propios para esto — Clerk lo maneja.
+// organization.inviteMember({ emailAddress, role: "org:member" })
+// NO crear endpoints propios para invitaciones — Clerk maneja el email y el token.
+
+// Solo necesitas estos endpoints propios:
+// GET /api/team/members     → listar miembros con nombre, email, rol
+// GET /api/team/invitations → invitaciones pendientes (también viene de Clerk)
 ```
 
 ---
 
-## Asignación de recursos por miembro
-
-Los proyectos y clientes del CRM pueden asignarse a un miembro específico:
+## Asignación de clientes y proyectos
 
 ```typescript
-// En las tablas projects y clients:
-assigned_to: uuid | null  // user_id del miembro responsable
+// Los clientes y proyectos pueden asignarse a un miembro específico del equipo
+// Campos: assigned_to: string | null  (Clerk user ID)
 
-// El miembro puede filtrar "mis proyectos" o "mis clientes"
-// GET /api/projects?assigned_to=me
+// Filtro "mis clientes":
 // GET /api/clients?assigned_to=me
+// El backend reemplaza "me" con req.userId del token de Clerk
 ```
 
 ---
 
 ## Límites de equipo por plan
 
-| Plan | Miembros máximos |
+| Plan | Miembros |
 |---|---|
 | Free | 1 (solo el admin) |
 | Starter | 3 |
-| Pro | Ilimitados |
+| Pro | 10 |
+| Agency | Ilimitados |
 
-Al intentar invitar a un miembro adicional que supere el límite, devolver HTTP 402 con `resource: "team_members"`.
+Al intentar invitar por encima del límite → HTTP 402 con `resource: "team_members"`.
 
 ---
 
-## Audit log de acciones del equipo
+## Caso de uso típico: Agencia con equipo
 
-Registrar en `analytics_events` las acciones sensibles:
+```
+Admin (dueño de la agencia):
+  - Configura las integraciones (WhatsApp, Drive)
+  - Gestiona el billing y el plan
+  - Asigna clientes a los consultores
 
-```typescript
-// Eventos a registrar
-| "team.member_invited"
-| "team.member_removed"
-| "team.role_changed"
-| "team.project_assigned"
-| "billing.plan_changed"
+Consultant (org:member):
+  - Atiende sus clientes asignados
+  - Genera entregables desde las plantillas
+  - Envía documentos por WhatsApp al cliente
+
+Viewer (asistente):
+  - Revisa proyectos activos
+  - Descarga entregables para revisión interna
+  - No puede generar ni modificar
 ```
 
-Esto permite al admin ver quién hizo qué en la organización.
+---
+
+## Audit log de acciones sensibles
+
+Registrar en `analytics_events`:
+
+```typescript
+| "team.member_invited"        // admin invitó un miembro
+| "team.member_removed"        // admin removió un miembro
+| "team.role_changed"          // cambio de rol
+| "billing.plan_changed"       // upgrade o downgrade del plan
+| "integration.configured"     // configuró WhatsApp u otra integración
+```
 
 ---
 
 ## Reglas clave
 
-- **Nunca reimplementar invitaciones** — usar Clerk Organizations
-- El `org:admin` no puede ser removido si es el único admin (verificar antes de procesar)
-- Los `org:viewer` nunca reciben endpoints de escritura — usar `requireRole` en todas las rutas mutantes
-- Al remover un miembro, reasignar sus proyectos/clientes a `assigned_to = null` (no al admin automáticamente)
+- **Nunca reimplementar invitaciones** — usar Clerk Organizations exclusivamente
+- El `org:admin` no puede ser removido si es el último admin (verificar antes de procesar la remoción)
+- Al remover un miembro, sus clientes y proyectos asignados quedan con `assigned_to = null`
 - Los datos de la organización persisten aunque el dueño original abandone — el rol de admin puede transferirse
-
----
-
-## Notificaciones de equipo
-
-Cuando ocurren eventos relevantes, notificar a los miembros correspondientes:
-- Nueva invitación aceptada → notificar al admin
-- Proyecto asignado → notificar al miembro asignado
-- Solución desplegada → notificar a todos los admins y members
-
-Implementar con un sistema de notificaciones in-app (tabla `notifications`) o integración con email/Slack via `integration-connectors`.
+- El Clerk `orgRole` viene en el JWT — no guardarlo en la DB, leerlo siempre del token
 
 ---
 
 ## Referencias
 
-- Leer `.local/skills/clerk-auth/SKILL.md` antes de implementar — es la fuente de verdad para auth
+- Leer `.local/skills/clerk-auth/SKILL.md` — fuente de verdad para auth y roles
 - Ver `freemium-gates` skill para límites de miembros por plan
 - Ver `multi-tenancy` skill para scoping de datos por organización
-- Ver `platform-analytics` skill para el audit log

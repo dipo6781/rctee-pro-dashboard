@@ -1,103 +1,139 @@
 ---
 name: platform-architecture
-description: Arquitectura recomendada para la plataforma AI multi-tenant con panel de control central para construcción de soluciones para pymes. Úsala al inicio de cualquier módulo nuevo, al tomar decisiones de stack, o al diseñar la estructura de datos multi-tenant.
+description: Arquitectura de R-C-T-E-E Pro — plataforma de consultoría empresarial aumentada por IA. Úsala al inicio de cualquier módulo, al tomar decisiones de stack, o al diseñar la estructura de datos. IMPORTANTE: esta plataforma NO es un constructor de chatbots; entrega diagnósticos y documentos profesionales a pymes.
 ---
 
-# Platform Architecture
+# Platform Architecture — R-C-T-E-E Pro
 
-Plataforma AI de control central para construir soluciones (apps, chatbots, automatizaciones, cobranza, eventos) orientadas a pymes. Modelo freemium, usuarios mixtos (solopreneurs, agencias, empresas). Fase: desde cero.
+**Qué es:** Fábrica de consultoría empresarial empaquetada en software. Convierte conocimiento experto en prompts estructurados (metodología R-C-T-E-E) que generan entregables de nivel consultor senior (PDF, Word, Excel) para pymes de 50-500 empleados en Colombia.
 
----
+**NO es:** constructor de chatbots, plataforma de automatización, ni SaaS de atención al cliente.
 
-## Stack Recomendado
-
-### Frontend
-- **React + Vite** (TypeScript) — panel de control central
-- **Tailwind CSS + shadcn/ui** — componentes UI consistentes
-- **TanStack Query** — estado del servidor
-- **React Router v6** — navegación SPA
-
-### Backend
-- **Node.js + Express 5** (TypeScript) — API REST
-- **OpenAPI + Orval** — contrato API generado, hooks React autogenerados
-- **Zod** — validación en servidor y cliente
-
-### Base de datos
-- **PostgreSQL + Drizzle ORM** — datos relacionales (proyectos, usuarios, orgs, plantillas)
-- **Multi-tenancy por `organization_id`** en cada tabla — aislamiento de datos por organización
-
-### IA
-- **Replit AI Integrations** (OpenAI/Anthropic vía proxy) — no requiere API key del usuario
-- Agentes configurados como registros en DB, ejecutados en runtime
-
-### Autenticación
-- **Clerk** (Replit-managed) — auth, organizaciones, roles
-
-### Pagos / Freemium
-- **Stripe** — suscripciones, upgrades, gestión de plan
-
-### Integraciones externas
-- Webhooks salientes nativos
-- Conectores para n8n/Zapier vía API keys generadas por la plataforma
-
-### Deploy de soluciones de usuario
-- Soluciones publicadas como sub-rutas o subdominios del hosting de la plataforma
+**Compite con:** consultores tradicionales (McKinsey, Deloitte, independientes), no con Typebot/Botpress/n8n.
 
 ---
 
-## Principios de diseño
+## Los 7 verticales (empresas/marcas de la plataforma)
 
-1. **Multi-tenant desde el día 1** — cada registro lleva `organization_id`, nunca datos globales sin scope
-2. **Contrato OpenAPI primero** — toda feature nueva empieza con un endpoint en `lib/api-spec/openapi.yaml`
-3. **Freemium por límites de recursos** — no features bloqueadas, sino cuotas (ej: max 3 proyectos, max 1000 mensajes/mes)
-4. **Plantillas como ciudadanos de primera clase** — cada solución construida puede exportarse como plantilla
-5. **Agentes IA como configuración** — los agentes son registros en DB, no código hardcodeado
+| Marca | Vertical | Solución core |
+|---|---|---|
+| 💰 Reintegra AI | Financiero / Cobranza | Diagnóstico de cartera, guiones de cobranza |
+| 🧘 Kineticorp Bienestar | RRHH / Bienestar laboral | Programas de bienestar, reducción de rotación |
+| 🎨 Diseño Interiores | Interiorismo | Propuestas de diseño y presupuestos |
+| 🎉 Toondimension | Eventos | Planificación y gestión de eventos |
+| 🌱 Ecokineti | Sostenibilidad | Diagnóstico ESG, planes de sostenibilidad |
+| 🏠 Reintegration | Inmobiliario | Valoración, estrategia de portafolio |
+| ⚡ Kinetic Corp IA | Tecnología | Automatización y transformación digital |
+
+Cada vertical tiene ~3 plantillas core (60+ en total).
+
+---
+
+## Metodología propietaria: R-C-T-E-E
+
+Cada plantilla es un prompt estructurado con 5 componentes:
+- **R**ol — qué experto es la IA en este contexto
+- **C**ontexto — datos específicos de la pyme que usa la plantilla
+- **T**area — qué debe producir exactamente
+- **E**specificaciones — formato, extensión, estructura del entregable
+- **E**jemplos — ejemplos del output esperado
+
+Ver skill `rcte-methodology` para implementación detallada.
+
+---
+
+## Stack técnico
+
+### Lo que YA existe (no recrear)
+- **Supabase** — base de datos PostgreSQL + auth + storage
+- **GitHub Pages** — frontend actual desplegado
+- **Groq API** — LLM rápido (primario para generación)
+- **Ollama** — LLM local (fallback / desarrollo)
+- **60+ plantillas** en 7 verticales
+
+### Stack para el panel de control central (nuevo)
+- **Frontend:** React + Vite (TypeScript) — panel no-code, 100% visual
+- **UI:** Tailwind CSS + shadcn/ui — debe sentirse como herramienta profesional, no startup tech
+- **Backend:** Node.js + Express 5 (TypeScript) — API REST
+- **DB:** Supabase (ya existente) vía Drizzle ORM
+- **Auth:** Clerk (Replit-managed) o Supabase Auth (ya configurado — verificar cuál usa)
+- **Generación de documentos:** PDFKit o Puppeteer (PDF), docxtemplater (Word), exceljs (Excel)
+- **Cola de jobs:** Bull/BullMQ + Redis para generación de documentos (puede tardar 30-120s)
+- **Pagos Colombia:** PayU Latam + PayPal (NO Stripe como prioritario — mercado colombiano)
+- **Pagos internacional:** Stripe (secundario)
 
 ---
 
 ## Estructura de datos core
 
 ```
-Organization (tenant)
-  ├── Users (miembros con roles)
-  ├── Projects (soluciones en construcción)
-  │     ├── Agents (agentes IA configurados)
-  │     ├── Integrations (webhooks, APIs externas)
-  │     └── Deployments (versiones publicadas)
-  ├── Templates (plantillas reutilizables)
-  ├── Clients (CRM — clientes finales de la org)
-  ├── Subscription (plan actual, límites)
-  └── Analytics Events (métricas de uso)
+Organization (consultor / agencia que usa la plataforma)
+  ├── Subscription (plan actual)
+  ├── Templates (acceso a plantillas por vertical y plan)
+  ├── Projects (engagement con un cliente pyme)
+  │     ├── Client (la pyme cliente)
+  │     ├── Deliverables (documentos generados)
+  │     │     ├── template_id → plantilla usada
+  │     │     ├── inputs (respuestas del formulario)
+  │     │     ├── generated_content (texto generado por IA)
+  │     │     └── file_url (PDF/Word/Excel final)
+  │     └── Payments (cobros al cliente final)
+  └── Analytics (métricas de uso y negocio)
 ```
 
 ---
 
-## Tabla de límites Freemium
+## Flujo core de la plataforma
 
-| Recurso | Free | Starter | Pro |
-|---|---|---|---|
-| Proyectos activos | 3 | 10 | Ilimitado |
-| Agentes IA | 1 por proyecto | 5 por proyecto | Ilimitado |
-| Mensajes IA / mes | 500 | 5.000 | 50.000 |
-| Miembros del equipo | 1 | 3 | Ilimitado |
-| Integraciones externas | 0 | 3 | Ilimitado |
-| Clientes en CRM | 50 | 500 | Ilimitado |
+```
+1. Usuario (consultor/pyme) selecciona plantilla del vertical correcto
+2. Completa formulario guiado (datos de la empresa, problema, contexto)
+3. Plataforma construye prompt R-C-T-E-E con los datos ingresados
+4. IA (Groq) genera el contenido del entregable
+5. Plataforma formatea y genera el documento (PDF/Word/Excel)
+6. Usuario descarga o envía al cliente final
+7. (Opcional) Usuario cobra al cliente final desde la plataforma
+```
 
 ---
 
-## Reglas de arquitectura
+## Modelo de monetización (Estrategia Escalonada)
 
-- Nunca exponer `organization_id` en URLs públicas — usar slugs o UUIDs opacos
-- Todas las queries en la DB deben filtrar por `organization_id` del usuario autenticado
-- Los agentes IA nunca se ejecutan sincrónicamente en el request handler — usar cola de jobs
-- Las plantillas tienen un flag `is_public` para el marketplace futuro
-- Los eventos de analytics se guardan en tabla append-only, nunca se actualizan
+| Nivel | Qué es | Precio |
+|---|---|---|
+| **Freemium** | Acceso a 3 plantillas básicas, 2 usos/mes | Gratis |
+| **Starter** | Acceso a 1 vertical completo, 10 usos/mes | $97/mes |
+| **Pro** | Todos los verticales, usos ilimitados | $297/mes |
+| **Por proyecto** | Entregable terminado entregado por el equipo | $4,500-$50,000 |
+| **Agencia** | Reventa — white label para agencias | $497/mes |
+
+---
+
+## Principios de diseño
+
+1. **No-code absoluto** — ningún usuario toca código. Todo es formularios, botones y plantillas.
+2. **Entregable > conversación** — el output no es un chat, es un documento profesional descargable.
+3. **Vertical-first** — la experiencia empieza eligiendo la industria, no la herramienta.
+4. **Colombia-first** — idioma español, precios en COP/USD, pagos con PayU, WhatsApp como canal primario.
+5. **Tiempo de entrega < 15 minutos** — desde completar el formulario hasta tener el PDF descargable.
+
+---
+
+## MVP (primera versión lanzable)
+
+Ver contexto de MVP en `solution-templates-lib` skill. En resumen:
+- 3 plantillas core funcionando perfectamente
+- Landing page de ventas (1 página)
+- Proceso de pago simple (transferencia + PayPal)
+- Entrega del documento en PDF
+
+**No incluir en MVP:** multi-tenancy complejo, todos los verticales, sistema de subscripciones completo.
 
 ---
 
 ## Referencias
 
-- Ver `pnpm-workspace` skill para estructura de monorepo
-- Ver `freemium-gates` skill para implementar límites por plan
-- Ver `multi-tenancy` skill para patrones de aislamiento de datos
-- Ver `ai-agent-config` skill para configuración de agentes
+- Ver `rcte-methodology` skill para la metodología de prompts
+- Ver `solution-templates-lib` skill para estructura de plantillas y MVP
+- Ver `platform-monetization` skill para pricing y pagos
+- Ver `pyme-crm` skill para gestión de clientes

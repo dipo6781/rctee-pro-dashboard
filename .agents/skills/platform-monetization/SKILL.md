@@ -1,173 +1,199 @@
 ---
 name: platform-monetization
-description: Implementación completa de monetización freemium con Stripe para la plataforma AI. Úsala al construir el módulo de billing, al configurar planes y suscripciones, o al manejar webhooks de pago. Cubre checkout, upgrades, downgrades y cancelaciones.
+description: Implementación del modelo de monetización híbrido de R-C-T-E-E Pro. Úsala al construir el módulo de billing, al configurar planes y pagos, o al implementar el modelo de venta por proyecto. Incluye estrategia escalonada: freemium → suscripción → venta de proyectos. Mercado primario: Colombia.
 ---
 
-# Platform Monetization
+# Platform Monetization — R-C-T-E-E Pro
 
-Modelo freemium con upgrades a planes pagos vía Stripe Subscriptions. Los límites de cada plan están en `freemium-gates` skill.
-
----
-
-## Setup inicial
-
-Leer la skill de Stripe ANTES de implementar: `.local/skills/stripe/SKILL.md`
-Leer la skill de monetización: `.local/skills/monetization/SKILL.md`
+Modelo híbrido con 3 capas de ingreso. El mercado primario es Colombia — priorizar PayU sobre Stripe.
 
 ---
 
-## Flujo de suscripción
+## Estrategia Escalonada de Monetización
 
-```
-Usuario free → clic "Upgrade" → Stripe Checkout Session → pago → webhook → actualizar plan en DB → usuario en plan Starter/Pro
-```
+### Capa 1: Acceso a la plataforma (recurrente)
 
----
-
-## Productos en Stripe (crear una sola vez en el dashboard)
-
-| Plan | Precio | Stripe Price ID (guardar en env) |
+| Plan | Precio | Qué incluye |
 |---|---|---|
-| Starter | $29/mes | `STRIPE_STARTER_MONTHLY_PRICE_ID` |
-| Starter | $290/año | `STRIPE_STARTER_YEARLY_PRICE_ID` |
-| Pro | $99/mes | `STRIPE_PRO_MONTHLY_PRICE_ID` |
-| Pro | $990/año | `STRIPE_PRO_YEARLY_PRICE_ID` |
+| **Free** | $0 | 3 plantillas básicas, 2 usos/mes |
+| **Starter** | $97 USD/mes | 1 vertical completo, 10 usos/mes |
+| **Pro** | $297 USD/mes | Todos los verticales, usos ilimitados |
+| **Agencia** | $497 USD/mes | Todo Pro + white label sin marca de plataforma |
+
+### Capa 2: Venta de proyectos (por entregable)
+
+El consultor/agencia vende el resultado a su cliente pyme. La plataforma puede facilitar el cobro:
+
+| Entregable | Precio sugerido al cliente final |
+|---|---|
+| Diagnóstico Financiero Express | $4,500 USD |
+| Plan de Cobranza Completo | $6,000 USD |
+| Programa Bienestar Laboral | $15,000 USD |
+| Paquete completo (3 entregables) | $20,000–$50,000 USD |
+
+**Comisión de plataforma:** 5–10% si el cobro pasa por la plataforma (fase futura).
+
+### Capa 3: Marketplace de plantillas (fase futura)
+
+Consultores expertos venden sus propias plantillas R-C-T-E-E. Plataforma toma 20% de comisión.
 
 ---
 
-## Endpoints requeridos
+## Proveedores de pago
 
-```
-POST /api/billing/checkout          → crear Stripe Checkout Session
-POST /api/billing/portal            → abrir Stripe Customer Portal
-GET  /api/billing/subscription      → estado actual del plan
-POST /api/billing/webhooks          → recibir eventos de Stripe (público, sin auth)
-```
-
----
-
-## Crear Checkout Session
+### Colombia (primario)
+**PayU Latam** — líder en Colombia, acepta PSE, tarjetas locales, efectivo (Efecty/Baloto)
 
 ```typescript
-// POST /api/billing/checkout
-import Stripe from "stripe";
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!);
+// PayU no tiene SDK TypeScript oficial — usar API REST directamente
+// Documentación: https://developers.payulatam.com
 
-app.post("/api/billing/checkout", requireAuth, async (req, res) => {
-  const { priceId, billingInterval } = req.body; // "monthly" | "yearly"
-  const { tenantId } = req;
-
-  // Obtener o crear Stripe customer
-  let sub = await db.query.subscriptions.findFirst({
-    where: eq(subscriptions.organizationId, tenantId),
-  });
-
-  let customerId = sub?.stripeCustomerId;
-  if (!customerId) {
-    const customer = await stripe.customers.create({
-      metadata: { organizationId: tenantId },
-    });
-    customerId = customer.id;
-    await db.update(subscriptions)
-      .set({ stripeCustomerId: customerId })
-      .where(eq(subscriptions.organizationId, tenantId));
-  }
-
-  const session = await stripe.checkout.sessions.create({
-    customer: customerId,
-    payment_method_types: ["card"],
-    line_items: [{ price: priceId, quantity: 1 }],
-    mode: "subscription",
-    success_url: `${process.env.APP_URL}/settings/billing?success=true`,
-    cancel_url: `${process.env.APP_URL}/settings/billing?canceled=true`,
-    metadata: { organizationId: tenantId },
-  });
-
-  res.json({ url: session.url });
-});
+const PAYU_CONFIG = {
+  apiLogin: process.env.PAYU_API_LOGIN!,
+  apiKey: process.env.PAYU_API_KEY!,
+  merchantId: process.env.PAYU_MERCHANT_ID!,
+  accountId: process.env.PAYU_ACCOUNT_ID!,
+  baseUrl: process.env.NODE_ENV === "production"
+    ? "https://api.payulatam.com/payments-api/4.0/service.cgi"
+    : "https://sandbox.api.payulatam.com/payments-api/4.0/service.cgi",
+};
 ```
 
----
+### Internacional (secundario)
+**PayPal** — para clientes fuera de Colombia o que prefieren USD.
+**Stripe** — solo si el usuario lo pide explícitamente (no priorizar para Colombia).
 
-## Webhook handler (eventos críticos)
-
-```typescript
-// POST /api/billing/webhooks — SIN middleware de auth
-app.post("/api/billing/webhooks", express.raw({ type: "application/json" }), async (req, res) => {
-  const sig = req.headers["stripe-signature"]!;
-  let event: Stripe.Event;
-
-  try {
-    event = stripe.webhooks.constructEvent(req.body, sig, process.env.STRIPE_WEBHOOK_SECRET!);
-  } catch {
-    return res.status(400).send("Webhook signature failed");
-  }
-
-  switch (event.type) {
-    case "checkout.session.completed": {
-      const session = event.data.object as Stripe.CheckoutSession;
-      const orgId = session.metadata?.organizationId;
-      const sub = await stripe.subscriptions.retrieve(session.subscription as string);
-      await updateSubscription(orgId!, sub);
-      break;
-    }
-    case "customer.subscription.updated":
-    case "customer.subscription.deleted": {
-      const sub = event.data.object as Stripe.Subscription;
-      const customer = await stripe.customers.retrieve(sub.customer as string) as Stripe.Customer;
-      const orgId = customer.metadata.organizationId;
-      await updateSubscription(orgId, sub);
-      break;
-    }
-  }
-
-  res.json({ received: true });
-});
-
-async function updateSubscription(orgId: string, stripeSub: Stripe.Subscription) {
-  const priceId = stripeSub.items.data[0].price.id;
-  const plan = getPlanFromPriceId(priceId); // mapear price ID → "starter" | "pro"
-
-  await db.update(subscriptions).set({
-    plan,
-    stripeSubscriptionId: stripeSub.id,
-    currentPeriodEnd: new Date(stripeSub.current_period_end * 1000),
-    status: stripeSub.status,
-    updatedAt: new Date(),
-  }).where(eq(subscriptions.organizationId, orgId));
-}
-```
+### MVP (fase 0 — antes de integrar APIs de pago)
+Para el MVP no integrar payment gateways. Usar proceso manual:
+1. Usuario elige plan/plantilla
+2. Plataforma muestra instrucciones: transferencia bancaria Bancolombia/Nequi o PayPal
+3. Usuario envía comprobante → acceso manual o semiautomático
+4. Esto permite validar demanda antes de invertir en integración de pagos
 
 ---
 
 ## Variables de entorno requeridas
 
 ```
-STRIPE_SECRET_KEY=sk_live_...
-STRIPE_WEBHOOK_SECRET=whsec_...
-STRIPE_STARTER_MONTHLY_PRICE_ID=price_...
-STRIPE_STARTER_YEARLY_PRICE_ID=price_...
-STRIPE_PRO_MONTHLY_PRICE_ID=price_...
-STRIPE_PRO_YEARLY_PRICE_ID=price_...
-APP_URL=https://tu-dominio.replit.app
+# PayU (Colombia)
+PAYU_API_LOGIN=
+PAYU_API_KEY=
+PAYU_MERCHANT_ID=
+PAYU_ACCOUNT_ID=
+
+# PayPal
+PAYPAL_CLIENT_ID=
+PAYPAL_CLIENT_SECRET=
+
+# Stripe (secundario)
+STRIPE_SECRET_KEY=
+STRIPE_WEBHOOK_SECRET=
+
+# Precios (IDs de productos en cada gateway)
+STARTER_PRICE_USD=97
+PRO_PRICE_USD=297
+AGENCY_PRICE_USD=497
 ```
 
-Usar `.local/skills/environment-secrets/SKILL.md` para configurar estos secrets.
+Usar `.local/skills/environment-secrets/SKILL.md` para configurar.
+
+---
+
+## Tabla `subscriptions` en DB
+
+```typescript
+export const subscriptions = pgTable("subscriptions", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  organizationId: uuid("organization_id").notNull().unique(),
+  plan: text("plan").notNull().default("free"),     // free | starter | pro | agency
+  billingInterval: text("billing_interval"),         // monthly | annual
+  paymentProvider: text("payment_provider"),         // payu | paypal | stripe | manual
+  externalSubscriptionId: text("external_subscription_id"),
+  externalCustomerId: text("external_customer_id"),
+  currentPeriodEnd: timestamp("current_period_end"),
+  status: text("status").notNull().default("active"), // active | past_due | canceled
+  currency: text("currency").notNull().default("USD"),
+  amountCents: integer("amount_cents"),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+```
+
+---
+
+## Endpoints
+
+```
+GET  /api/billing/subscription        → plan y estado actual
+POST /api/billing/checkout/payu       → iniciar pago con PayU
+POST /api/billing/checkout/paypal     → iniciar pago con PayPal
+POST /api/billing/checkout/manual     → registrar intención de pago manual
+POST /api/billing/webhooks/payu       → confirmar pagos PayU (sin auth)
+POST /api/billing/webhooks/paypal     → confirmar pagos PayPal (sin auth)
+GET  /api/billing/invoices            → historial de pagos
+```
+
+---
+
+## Flujo PayU (Colombia)
+
+```typescript
+// PayU usa un modelo de redirect — el usuario va a la página de PayU y vuelve
+async function createPayUCheckout(orgId: string, plan: PlanTier): Promise<string> {
+  const amount = PLAN_PRICES[plan];
+  const referenceCode = `${orgId}_${plan}_${Date.now()}`;
+
+  // Generar firma MD5
+  const signature = md5(`${PAYU_CONFIG.apiKey}~${PAYU_CONFIG.merchantId}~${referenceCode}~${amount}~USD`);
+
+  // Construir URL del formulario PayU (redirección)
+  const params = new URLSearchParams({
+    merchantId: PAYU_CONFIG.merchantId,
+    accountId: PAYU_CONFIG.accountId,
+    description: `R-C-T-E-E Pro - Plan ${plan}`,
+    referenceCode,
+    amount: amount.toString(),
+    currency: "USD",
+    signature,
+    responseUrl: `${process.env.APP_URL}/billing/response`,
+    confirmationUrl: `${process.env.APP_URL}/api/billing/webhooks/payu`,
+  });
+
+  return `https://checkout.payulatam.com/ppp-web-gateway-payu/?${params}`;
+}
+```
+
+---
+
+## Precios en COP (Colombia)
+
+Mostrar precios en COP además de USD para usuarios colombianos:
+
+```typescript
+// Usar tasa de cambio aproximada — actualizar mensualmente
+const USD_TO_COP = 4100; // Actualizar con API de tasa de cambio si se quiere dinámico
+
+const PRICES_COP = {
+  starter: 97 * USD_TO_COP,  // ~$397,700 COP
+  pro: 297 * USD_TO_COP,     // ~$1,217,700 COP
+  agency: 497 * USD_TO_COP,  // ~$2,037,700 COP
+};
+```
 
 ---
 
 ## Reglas clave
 
-- El webhook endpoint NUNCA lleva middleware de autenticación — Stripe lo llama directamente
-- Usar `express.raw()` en el webhook, NO `express.json()` — la firma falla si el body es parseado
-- Siempre verificar la firma del webhook antes de procesar (`constructEvent`)
-- Al downgrade, no borrar datos — solo cambiarlos a "read-only" si superan el límite del plan nuevo
-- Stripe Customer Portal permite al usuario gestionar su suscripción sin código adicional
+- **MVP:** Empezar con proceso manual (transferencia + comprobante) — no invertir en integración hasta tener los primeros 5 clientes pagados
+- PayU es el proveedor primario para Colombia, no Stripe
+- Los webhooks de pago van SIN middleware de autenticación (PayU/PayPal los llaman directamente)
+- Al confirmar un pago, actualizar el plan del usuario ANTES de responder 200 al webhook
+- Ofrecer descuento del 20% en facturación anual
 
 ---
 
 ## Referencias
 
 - Ver `freemium-gates` skill para los límites por plan
-- Leer `.local/skills/stripe/SKILL.md` antes de implementar
 - Ver `.local/skills/environment-secrets/SKILL.md` para configurar secrets
+- Ver `platform-architecture` skill para la estrategia de monetización completa

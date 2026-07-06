@@ -1,201 +1,281 @@
 ---
 name: integration-connectors
-description: Sistema de integraciones externas para la plataforma AI. Úsala al construir el módulo de integraciones, al agregar un conector nuevo (n8n, Zapier, email, WhatsApp, etc.), o al implementar webhooks entrantes/salientes.
+description: Integraciones externas de R-C-T-E-E Pro. Úsala al construir el módulo de integraciones, al conectar WhatsApp para envío de entregables, al integrar PayU para pagos en Colombia, o al agregar webhooks de entrada/salida. Canal primario en Colombia: WhatsApp Business.
 ---
 
-# Integration Connectors
+# Integration Connectors — R-C-T-E-E Pro
 
-Las integraciones conectan los proyectos de los usuarios con herramientas externas. Hay dos tipos: **webhooks** (la plataforma envía/recibe eventos) y **conectores** (integraciones OAuth o API key con servicios específicos).
+Las integraciones conectan la plataforma con los canales de comunicación y pago que usan las pymes colombianas. Canal dominante: WhatsApp. Pago dominante: transferencia bancaria / PayU.
 
 ---
 
-## Modelo de datos
+## Integraciones prioritarias para Colombia
+
+| Integración | Prioridad | Caso de uso |
+|---|---|---|
+| WhatsApp Business Cloud API | 🔴 Alta | Enviar entregables al cliente pyme, notificaciones |
+| Email (SendGrid / SMTP) | 🔴 Alta | Respaldo a WhatsApp, facturas, notificaciones |
+| PayU Latam | 🔴 Alta | Cobros en Colombia (PSE, tarjetas, efectivo) |
+| PayPal | 🟡 Media | Clientes internacionales o que prefieren USD |
+| Google Drive | 🟡 Media | Guardar entregables en el Drive del consultor |
+| Calendly | 🟢 Baja | Agendar llamada de diagnóstico desde landing page |
+| Stripe | 🟢 Baja | Solo si el usuario lo solicita explícitamente |
+| n8n / Zapier / Make | 🟢 Baja | Automatizaciones avanzadas (plan Pro+) |
+
+---
+
+## WhatsApp Business Cloud API (Meta)
+
+Canal primario para Colombia. Permite enviar documentos PDF directamente al cliente pyme.
+
+### Setup
+
+```typescript
+// Variables de entorno:
+// WHATSAPP_PHONE_NUMBER_ID — ID del número de WhatsApp Business
+// WHATSAPP_ACCESS_TOKEN — token permanente de Meta Business
+// WHATSAPP_WEBHOOK_VERIFY_TOKEN — token para verificar el webhook
+
+const WHATSAPP_API_URL = `https://graph.facebook.com/v18.0/${process.env.WHATSAPP_PHONE_NUMBER_ID}/messages`;
+```
+
+### Enviar documento al cliente
+
+```typescript
+async function sendWhatsAppDocument(
+  recipientPhone: string, // formato E.164: +573001234567
+  documentUrl: string,    // URL firmada del Supabase Storage (30 días)
+  filename: string,       // "Diagnostico_Financiero_EmpresaXYZ.pdf"
+  caption: string         // "Aquí está su diagnóstico financiero. Con gusto resolvemos sus dudas."
+): Promise<void> {
+  const response = await fetch(WHATSAPP_API_URL, {
+    method: "POST",
+    headers: {
+      "Authorization": `Bearer ${process.env.WHATSAPP_ACCESS_TOKEN}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      messaging_product: "whatsapp",
+      recipient_type: "individual",
+      to: recipientPhone,
+      type: "document",
+      document: {
+        link: documentUrl,
+        filename,
+        caption,
+      },
+    }),
+  });
+
+  if (!response.ok) {
+    const error = await response.json();
+    throw new Error(`WhatsApp send failed: ${JSON.stringify(error)}`);
+  }
+}
+```
+
+### Enviar mensaje de texto
+
+```typescript
+async function sendWhatsAppText(
+  recipientPhone: string,
+  message: string
+): Promise<void> {
+  await fetch(WHATSAPP_API_URL, {
+    method: "POST",
+    headers: {
+      "Authorization": `Bearer ${process.env.WHATSAPP_ACCESS_TOKEN}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      messaging_product: "whatsapp",
+      to: recipientPhone,
+      type: "text",
+      text: { body: message },
+    }),
+  });
+}
+```
+
+### Webhook de WhatsApp (recibir mensajes)
+
+```typescript
+// GET /api/webhooks/whatsapp — verificación del webhook
+app.get("/api/webhooks/whatsapp", (req, res) => {
+  const mode = req.query["hub.mode"];
+  const token = req.query["hub.verify_token"];
+  const challenge = req.query["hub.challenge"];
+
+  if (mode === "subscribe" && token === process.env.WHATSAPP_WEBHOOK_VERIFY_TOKEN) {
+    res.status(200).send(challenge);
+  } else {
+    res.sendStatus(403);
+  }
+});
+
+// POST /api/webhooks/whatsapp — recibir mensajes entrantes (SIN auth)
+app.post("/api/webhooks/whatsapp", (req, res) => {
+  res.sendStatus(200); // responder 200 rápido a Meta
+  processWhatsAppWebhook(req.body).catch(err =>
+    logger.error({ err }, "WhatsApp webhook processing failed")
+  );
+});
+```
+
+---
+
+## Email (SendGrid)
+
+Respaldo a WhatsApp para entrega de entregables y notificaciones.
+
+```typescript
+// Variables de entorno: SENDGRID_API_KEY, FROM_EMAIL
+
+import sgMail from "@sendgrid/mail";
+sgMail.setApiKey(process.env.SENDGRID_API_KEY!);
+
+async function sendDeliverableEmail(
+  to: string,
+  clientName: string,
+  deliverableName: string,
+  downloadUrl: string
+): Promise<void> {
+  await sgMail.send({
+    to,
+    from: { email: process.env.FROM_EMAIL!, name: "R-C-T-E-E Pro" },
+    subject: `Su ${deliverableName} está listo`,
+    html: `
+      <p>Estimado/a ${clientName},</p>
+      <p>Su <strong>${deliverableName}</strong> está listo para descargarse.</p>
+      <p><a href="${downloadUrl}" style="padding:12px 24px;background:#1B4F72;color:white;text-decoration:none;border-radius:4px;">
+        Descargar documento
+      </a></p>
+      <p>El enlace es válido por 30 días.</p>
+    `,
+  });
+}
+```
+
+---
+
+## Google Drive (guardar entregables automáticamente)
+
+```typescript
+// OAuth con Google — el consultor conecta su Drive
+// Al generar un entregable, opcionalmente subirlo a su carpeta de Drive
+
+// Variables de entorno (por org, encriptadas):
+// GOOGLE_ACCESS_TOKEN, GOOGLE_REFRESH_TOKEN, GOOGLE_DRIVE_FOLDER_ID
+
+async function uploadToDrive(
+  buffer: Buffer,
+  filename: string,
+  mimeType: string,
+  folderId: string,
+  accessToken: string
+): Promise<string> {
+  const form = new FormData();
+  form.append("metadata", JSON.stringify({
+    name: filename,
+    parents: [folderId],
+  }), { contentType: "application/json" });
+  form.append("file", buffer, { contentType: mimeType });
+
+  const response = await fetch(
+    "https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart",
+    {
+      method: "POST",
+      headers: { "Authorization": `Bearer ${accessToken}`, ...form.getHeaders() },
+      body: form,
+    }
+  );
+
+  const data = await response.json();
+  return data.id; // Google Drive file ID
+}
+```
+
+---
+
+## Modelo de datos de integraciones
 
 ```typescript
 // Tabla: integrations
 {
   id: uuid,
   organization_id: uuid,
-  project_id: uuid,
-  type: IntegrationType,
-  name: string,              // nombre visible al usuario
-  config: jsonb,             // configuración no-sensible (URL, channel, etc.)
-  credentials: jsonb,        // ENCRIPTADO — API keys, tokens
-  status: "active" | "error" | "disabled",
-  last_triggered_at: timestamp,
-  error_message: text | null,
+  type: IntegrationType,           // "whatsapp" | "email" | "google_drive" | etc.
+  name: string,                    // "WhatsApp de la empresa"
+  is_active: boolean,
+  config: jsonb,                   // datos no-sensibles (phone_number_id, folder_id)
+  credentials_encrypted: text,     // tokens y API keys encriptados (AES-256-GCM)
+  last_used_at: timestamp | null,
   created_at, updated_at
 }
-
-// Tabla: webhook_logs (auditoría de webhooks)
-{
-  id: uuid,
-  integration_id: uuid,
-  organization_id: uuid,
-  direction: "inbound" | "outbound",
-  payload: jsonb,
-  status_code: integer,
-  duration_ms: integer,
-  created_at: timestamp,
-}
 ```
+
+**Encriptación de credenciales:** Ver `multi-tenancy` skill para el patrón de encriptación.
 
 ---
 
-## Tipos de integración (`IntegrationType`)
+## Mensajes predefinidos por vertical (plantillas de WhatsApp)
+
+Cada vertical tiene mensajes predefinidos en español colombiano:
 
 ```typescript
-type IntegrationType =
-  // Automatización
-  | "n8n_webhook"           // trigger a n8n workflow
-  | "zapier_webhook"        // trigger a Zapier zap
-  | "make_webhook"          // trigger a Make.com scenario
-  // Comunicación
-  | "whatsapp_cloud"        // WhatsApp Business API (Meta)
-  | "twilio_sms"            // SMS via Twilio
-  | "sendgrid_email"        // Email via SendGrid
-  | "slack_webhook"         // Notificaciones a Slack
-  // Datos
-  | "google_sheets"         // Leer/escribir hojas de cálculo
-  | "airtable"              // Base de datos Airtable
-  // Pagos
-  | "stripe_webhook"        // Recibir eventos de Stripe del usuario
-  | "mercadopago"           // Pagos en LATAM
-  // Custom
-  | "custom_webhook"        // URL personalizada (outbound)
-  | "inbound_webhook"       // Endpoint generado para recibir datos
+const WHATSAPP_TEMPLATES = {
+  reintegra_ai: {
+    deliverable_ready: (clientName: string, docName: string) =>
+      `Hola ${clientName} 👋\n\nSu *${docName}* está listo. Lo encontrará adjunto.\n\nCualquier pregunta sobre los resultados, con mucho gusto le ayudamos. 🤝`,
+    payment_reminder: (clientName: string, amount: string, dueDate: string) =>
+      `Hola ${clientName}, le recordamos que el saldo de *${amount}* vence el *${dueDate}*. ¿Cómo podemos ayudarle a gestionar este pago?`,
+  },
+  kineticorp_bienestar: {
+    deliverable_ready: (clientName: string, docName: string) =>
+      `Hola ${clientName} 😊\n\nSu *${docName}* está listo. Con él tiene todo lo necesario para iniciar su programa de bienestar este mes.\n\n¡Éxito en la implementación! 🌿`,
+  },
+};
 ```
 
 ---
 
-## Webhooks salientes (outbound)
-
-```typescript
-// src/lib/integrations/webhook.ts
-export async function triggerWebhook(
-  integration: Integration,
-  payload: Record<string, unknown>
-): Promise<void> {
-  const start = Date.now();
-  let statusCode = 0;
-
-  try {
-    const res = await fetch(integration.config.url, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "X-Platform-Event": "true",
-        "X-Organization-Id": integration.organizationId,
-        ...(integration.config.secret
-          ? { "X-Webhook-Secret": integration.config.secret }
-          : {}),
-      },
-      body: JSON.stringify({
-        event: payload.event,
-        timestamp: new Date().toISOString(),
-        data: payload.data,
-      }),
-      signal: AbortSignal.timeout(10000), // 10s timeout
-    });
-    statusCode = res.status;
-  } catch (err) {
-    // Registrar error pero no bloquear el flujo principal
-    logger.error({ err, integrationId: integration.id }, "Webhook failed");
-  } finally {
-    await logWebhook(integration.id, integration.organizationId, "outbound", payload, statusCode, Date.now() - start);
-  }
-}
-```
-
----
-
-## Webhooks entrantes (inbound)
-
-Cada integración inbound genera una URL única:
-`POST /api/webhooks/inbound/:token`
-
-```typescript
-// El token es un UUID opaco — no expone IDs internos
-// Mapear token → integration_id en tabla `inbound_webhook_tokens`
-
-app.post("/api/webhooks/inbound/:token", async (req, res) => {
-  const integration = await resolveInboundToken(req.params.token);
-  if (!integration) return res.status(404).end();
-
-  // Disparar el agente asociado con el payload recibido
-  await enqueueAgentJob(integration.agentId, req.body);
-
-  res.json({ received: true });
-});
-```
-
----
-
-## Encriptación de credenciales
-
-Las API keys y tokens de terceros se guardan encriptados con AES-256-GCM:
-
-```typescript
-import { createCipheriv, createDecipheriv, randomBytes } from "crypto";
-
-const ENCRYPTION_KEY = Buffer.from(process.env.CREDENTIALS_ENCRYPTION_KEY!, "hex"); // 32 bytes
-
-export function encryptCredentials(data: Record<string, string>): string {
-  const iv = randomBytes(16);
-  const cipher = createCipheriv("aes-256-gcm", ENCRYPTION_KEY, iv);
-  const encrypted = Buffer.concat([cipher.update(JSON.stringify(data), "utf8"), cipher.final()]);
-  const tag = cipher.getAuthTag();
-  return Buffer.concat([iv, tag, encrypted]).toString("base64");
-}
-
-export function decryptCredentials(encrypted: string): Record<string, string> {
-  const buf = Buffer.from(encrypted, "base64");
-  const iv = buf.subarray(0, 16);
-  const tag = buf.subarray(16, 32);
-  const data = buf.subarray(32);
-  const decipher = createDecipheriv("aes-256-gcm", ENCRYPTION_KEY, iv);
-  decipher.setAuthTag(tag);
-  return JSON.parse(decipher.update(data) + decipher.final("utf8"));
-}
-```
-
-**Variable de entorno requerida:** `CREDENTIALS_ENCRYPTION_KEY` — 32 bytes aleatorios en hex.
-
----
-
-## Límites por plan (ver freemium-gates)
+## Límites por plan
 
 | Plan | Integraciones activas |
 |---|---|
-| Free | 0 |
-| Starter | 3 |
-| Pro | Ilimitadas |
+| Free | Solo email básico |
+| Starter | WhatsApp + Email |
+| Pro | Todas las integraciones |
+| Agency | Todas + API propia para conectar sistemas del cliente |
 
 ---
 
-## Checklist al agregar un conector nuevo
+## Variables de entorno requeridas
 
-- [ ] Agregar el tipo a `IntegrationType`
-- [ ] Crear un schema de validación Zod para su `config` y `credentials`
-- [ ] Implementar un test de conexión (`POST /api/integrations/:id/test`)
-- [ ] Documentar los eventos que puede emitir/recibir
-- [ ] Agregar al UI del catálogo de integraciones con ícono y descripción
+```
+WHATSAPP_PHONE_NUMBER_ID=
+WHATSAPP_ACCESS_TOKEN=
+WHATSAPP_WEBHOOK_VERIFY_TOKEN=
+SENDGRID_API_KEY=
+FROM_EMAIL=noreply@rcteepro.com
+CREDENTIALS_ENCRYPTION_KEY=  # 32 bytes hex para encriptar tokens de terceros
+```
 
 ---
 
 ## Reglas clave
 
-- **Nunca** loguear credenciales o payloads de webhook con datos sensibles
-- Los webhooks salientes tienen timeout de 10s — no usar para operaciones largas
-- Guardar los últimos 100 logs de webhook por integración (rotar automáticamente)
-- Al desactivar una integración, mantener los logs históricos
-- `CREDENTIALS_ENCRYPTION_KEY` debe estar en secrets, nunca en código
+- **Nunca loguear** tokens, API keys ni contenido de mensajes de WhatsApp
+- Los webhooks de entrada (WhatsApp, PayU) responden **200 inmediatamente** y procesan en background
+- Las credenciales de integraciones (tokens de Google, etc.) se guardan **siempre encriptadas** en DB
+- WhatsApp requiere que los números estén en formato E.164 (+57...)
+- Las plantillas de mensaje de WhatsApp deben aprobarse previamente en Meta Business Manager para mensajes iniciados por el negocio
 
 ---
 
 ## Referencias
 
-- Ver `platform-architecture` skill para estructura general
-- Ver `freemium-gates` skill para límites por plan
-- Ver `multi-tenancy` skill para aislamiento por organización
-- Leer `.local/skills/environment-secrets/SKILL.md` para configurar `CREDENTIALS_ENCRYPTION_KEY`
+- Ver `solution-deploy-flow` skill para el flujo de compartir entregables por WhatsApp
+- Ver `pyme-crm` skill para los datos del cliente (teléfono, email)
+- Ver `platform-monetization` skill para la integración de PayU
+- Ver `.local/skills/environment-secrets/SKILL.md` para configurar secrets

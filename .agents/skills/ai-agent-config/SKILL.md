@@ -1,71 +1,204 @@
 ---
 name: ai-agent-config
-description: Configuración, creación y ejecución de agentes IA dentro de la plataforma. Úsala al construir el módulo de agentes, al agregar un nuevo tipo de agente, o al conectar un agente a un proyecto de usuario.
+description: Configuración del motor de IA en R-C-T-E-E Pro para generación de entregables de consultoría. Úsala al implementar la generación de documentos con Groq/Ollama, al construir el pipeline de prompts R-C-T-E-E, o al manejar la cola de generación de documentos.
 ---
 
-# AI Agent Config
+# AI Agent Config — R-C-T-E-E Pro
 
-Los agentes IA son **registros en base de datos**, no código hardcodeado. Cada agente tiene un tipo, configuración, modelo, y prompt del sistema. Se ejecutan bajo demanda con el contexto del proyecto al que pertenecen.
+El "agente" en esta plataforma NO es un chatbot. Es un **motor de generación de documentos profesionales** que toma un formulario completado por el usuario, construye un prompt R-C-T-E-E estructurado, llama a la IA, y produce el contenido de un entregable (PDF, Word, Excel).
 
 ---
 
-## Modelo de datos del agente
+## Proveedores de IA (ya configurados en el proyecto)
 
 ```typescript
-// Campos core de la tabla `agents`
-id: uuid
-organization_id: uuid          // tenant scope
-project_id: uuid               // proyecto al que pertenece
-name: string                   // nombre visible al usuario
-type: AgentType                // ver tipos abajo
-model: string                  // "gpt-4o", "claude-3-5-sonnet", etc.
-system_prompt: text            // instrucciones del agente
-temperature: float             // 0.0 - 2.0, default 0.7
-max_tokens: integer            // límite de respuesta
-tools_enabled: jsonb           // array de tools habilitadas
-knowledge_base_ids: uuid[]     // documentos de contexto
-is_active: boolean
-created_at, updated_at
+// Proveedor primario: Groq (velocidad alta, ideal para docs largos)
+// Proveedor fallback: Ollama (local, desarrollo y contingencia)
+
+// Variables de entorno requeridas:
+// GROQ_API_KEY — ya configurada
+// OLLAMA_BASE_URL — http://localhost:11434 (dev)
 ```
 
-## Tipos de agente (`AgentType`)
+### Cliente Groq
 
-| Tipo | Caso de uso |
-|---|---|
-| `chatbot` | Atención al cliente, soporte, FAQ |
-| `automator` | Ejecuta flujos de trabajo paso a paso |
-| `collector` | Recopila datos del usuario (formularios conversacionales) |
-| `analyzer` | Analiza documentos, datos, tendencias |
-| `notifier` | Envía alertas y resúmenes proactivos |
-| `sales` | Calificación de leads, seguimiento comercial |
+```typescript
+import Groq from "groq-sdk";
+
+const groq = new Groq({ apiKey: process.env.GROQ_API_KEY });
+
+export async function generateWithGroq(
+  systemPrompt: string,
+  userContent: string,
+  options?: { model?: string; maxTokens?: number; temperature?: number }
+): Promise<string> {
+  const response = await groq.chat.completions.create({
+    model: options?.model ?? "llama-3.3-70b-versatile", // modelo recomendado para docs largos
+    max_tokens: options?.maxTokens ?? 8000,
+    temperature: options?.temperature ?? 0.3, // bajo = más consistente para documentos formales
+    messages: [
+      { role: "system", content: systemPrompt },
+      { role: "user", content: userContent },
+    ],
+  });
+  return response.choices[0].message.content ?? "";
+}
+```
+
+### Cliente Ollama (fallback)
+
+```typescript
+export async function generateWithOllama(
+  systemPrompt: string,
+  userContent: string
+): Promise<string> {
+  const response = await fetch(`${process.env.OLLAMA_BASE_URL}/api/chat`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      model: "llama3.1:8b",
+      stream: false,
+      messages: [
+        { role: "system", content: systemPrompt },
+        { role: "user", content: userContent },
+      ],
+    }),
+  });
+  const data = await response.json();
+  return data.message.content;
+}
+```
 
 ---
 
-## Integración con Replit AI (sin API key del usuario)
+## Pipeline de generación de entregables
 
-Usar siempre el proxy de Replit AI Integrations. Leer `.local/skills/ai-integrations-openai/SKILL.md` o `.local/skills/ai-integrations-anthropic/SKILL.md` para setup exacto.
+```
+FormData (inputs del usuario)
+  ↓
+buildRCTEEPrompt(template, inputs)   ← ver rcte-methodology skill
+  ↓
+generateWithGroq(systemPrompt, userContent)
+  ↓
+validateOutput(rawContent)            ← verificar longitud y estructura mínima
+  ↓
+formatDocument(content, template.outputFormat)  ← PDF | Word | Excel
+  ↓
+uploadToStorage(file)                 ← Supabase Storage
+  ↓
+updateDeliverable(id, { file_url, status: "ready" })
+```
+
+---
+
+## Cola de generación (jobs)
+
+La generación de un documento toma 30-120 segundos. **Nunca bloquear el request HTTP.** Usar cola de jobs:
 
 ```typescript
-// Patrón de ejecución de agente
-import OpenAI from "openai";
+// Usando BullMQ + Redis (o pg-boss si ya hay Supabase disponible)
+// Alternativa simple sin Redis: tabla `generation_jobs` en Supabase + polling
 
-const client = new OpenAI({
-  baseURL: process.env.REPLIT_AI_PROXY_URL,
-  apiKey: process.env.REPLIT_AI_PROXY_TOKEN,
-});
+// Tabla: generation_jobs
+{
+  id: uuid,
+  deliverable_id: uuid,
+  template_id: uuid,
+  organization_id: uuid,
+  inputs: jsonb,         // datos del formulario
+  status: "queued" | "processing" | "completed" | "failed",
+  attempts: integer,     // reintentos
+  error: text | null,
+  started_at: timestamp,
+  completed_at: timestamp,
+  created_at: timestamp,
+}
+```
 
-async function runAgent(agent: Agent, userMessage: string, history: Message[]) {
-  const response = await client.chat.completions.create({
-    model: agent.model,
-    temperature: agent.temperature,
-    max_tokens: agent.max_tokens,
-    messages: [
-      { role: "system", content: agent.system_prompt },
-      ...history,
-      { role: "user", content: userMessage },
-    ],
-  });
-  return response.choices[0].message.content;
+### Flujo con polling (sin Redis — más simple para MVP)
+
+```typescript
+// 1. Frontend envía formulario → backend crea job → devuelve job_id inmediatamente
+// 2. Frontend hace polling cada 3s: GET /api/jobs/:id/status
+// 3. Cuando status = "completed", frontend descarga el documento
+
+// Backend worker: cron cada 5s que toma jobs en "queued" y los procesa
+```
+
+---
+
+## Modelos recomendados por tipo de entregable
+
+| Entregable | Modelo Groq | Max tokens | Temperatura |
+|---|---|---|---|
+| Diagnóstico financiero (PDF 30 pág) | `llama-3.3-70b-versatile` | 8000 | 0.2 |
+| Guión de cobranza (Word) | `llama-3.1-8b-instant` | 4000 | 0.4 |
+| Plan de bienestar (PDF) | `llama-3.3-70b-versatile` | 6000 | 0.3 |
+| Análisis de cartera (Excel) | `llama-3.1-8b-instant` | 3000 | 0.1 |
+| Propuesta comercial | `llama-3.3-70b-versatile` | 5000 | 0.3 |
+
+---
+
+## Validación del output
+
+Antes de formatear el documento, validar que el output sea usable:
+
+```typescript
+function validateOutput(content: string, template: Template): ValidationResult {
+  const minLength = template.outputFormat === "pdf_30pages" ? 5000 : 1000;
+  const hasRequiredSections = template.requiredSections.every(section =>
+    content.toLowerCase().includes(section.toLowerCase())
+  );
+
+  if (content.length < minLength) return { valid: false, reason: "output_too_short" };
+  if (!hasRequiredSections) return { valid: false, reason: "missing_sections" };
+  return { valid: true };
+}
+
+// Si falla la validación: reintentar con temperature más alta (0.5) y prompt levemente modificado
+// Máximo 3 reintentos antes de marcar como "failed" y notificar al usuario
+```
+
+---
+
+## Generación de documentos
+
+### PDF (PDFKit o Puppeteer)
+
+```typescript
+// Puppeteer: más fácil para documentos con formato complejo y gráficos
+// PDFKit: más ligero, mejor para documentos estructurados simples
+
+// Recomendado para R-C-T-E-E Pro: Puppeteer
+// Flujo: contenido IA → plantilla HTML con estilos de marca → Puppeteer → PDF
+
+import puppeteer from "puppeteer";
+
+async function generatePDF(htmlContent: string, brand: BrandConfig): Promise<Buffer> {
+  const browser = await puppeteer.launch({ headless: true, args: ["--no-sandbox"] });
+  const page = await browser.newPage();
+  await page.setContent(renderHTMLTemplate(htmlContent, brand));
+  const pdf = await page.pdf({ format: "A4", printBackground: true });
+  await browser.close();
+  return pdf;
+}
+```
+
+### Word (docxtemplater)
+
+```typescript
+// Usar plantilla .docx base por vertical + reemplazar variables con el contenido generado
+import Docxtemplater from "docxtemplater";
+import PizZip from "pizzip";
+import fs from "fs";
+
+async function generateWord(content: DocumentContent, templatePath: string): Promise<Buffer> {
+  const template = fs.readFileSync(templatePath, "binary");
+  const zip = new PizZip(template);
+  const doc = new Docxtemplater(zip);
+  doc.setData(content);
+  doc.render();
+  return doc.getZip().generate({ type: "nodebuffer" });
 }
 ```
 
@@ -73,66 +206,16 @@ async function runAgent(agent: Agent, userMessage: string, history: Message[]) {
 
 ## Reglas clave
 
-- **Nunca ejecutar agentes sincrónicamente en el request handler** si el tiempo de respuesta puede superar 30s. Usar streaming (`stream: true`) o jobs en cola.
-- Los agentes con `type: automator` deben registrar cada paso ejecutado en tabla `agent_runs` para auditoría.
-- El `system_prompt` siempre debe incluir el contexto de la organización y el proyecto (inyectado en runtime, no hardcodeado).
-- Los límites de mensajes/mes se verifican ANTES de ejecutar el agente — ver `freemium-gates` skill.
-- Guardar el historial de conversación por `session_id`, no por usuario, para permitir múltiples sesiones simultáneas.
-
----
-
-## Tabla `agent_runs` (auditoría)
-
-```
-id, agent_id, organization_id, session_id,
-input_tokens, output_tokens, duration_ms,
-status (success|error|timeout), error_message,
-created_at
-```
-
----
-
-## Tools habilitables por agente
-
-```typescript
-type AgentTool =
-  | "web_search"          // búsqueda web
-  | "send_email"          // envío de emails
-  | "create_calendar_event" // eventos
-  | "query_crm"           // consultar CRM de la org
-  | "webhook_call"        // llamar webhook externo
-  | "generate_document"   // crear PDF/doc
-```
-
-Solo habilitar las tools que el plan del usuario permite — ver `freemium-gates`.
-
----
-
-## Streaming de respuestas al frontend
-
-```typescript
-// En el route handler (Express 5)
-res.setHeader("Content-Type", "text/event-stream");
-res.setHeader("Cache-Control", "no-cache");
-
-const stream = await client.chat.completions.create({
-  model: agent.model,
-  messages,
-  stream: true,
-});
-
-for await (const chunk of stream) {
-  const text = chunk.choices[0]?.delta?.content || "";
-  res.write(`data: ${JSON.stringify({ text })}\n\n`);
-}
-res.write("data: [DONE]\n\n");
-res.end();
-```
+- **Temperatura baja (0.1-0.3)** para documentos formales — más consistente y profesional
+- **Nunca exponer el prompt completo al usuario** — es propiedad intelectual de la plataforma
+- Los jobs fallidos se reintentan automáticamente hasta 3 veces antes de notificar
+- Guardar el `generated_content` (texto crudo) además del archivo final — permite regenerar sin llamar a la IA
+- Para el MVP: polling simple sobre tabla de Supabase (no necesita Redis)
 
 ---
 
 ## Referencias
 
-- Ver `platform-architecture` skill para estructura de datos completa
-- Ver `freemium-gates` skill para límites de uso por plan
-- Leer `.local/skills/ai-integrations-openai/SKILL.md` antes de implementar
+- Ver `rcte-methodology` skill para construcción de prompts
+- Ver `solution-templates-lib` skill para estructura de plantillas
+- Ver `platform-architecture` skill para el stack completo

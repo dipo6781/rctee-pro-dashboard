@@ -1,155 +1,189 @@
 ---
 name: solution-templates-lib
-description: Sistema de biblioteca de plantillas de soluciones para la plataforma. Úsala al construir el módulo de plantillas, al permitir que los usuarios exporten sus proyectos como plantillas, o al implementar el marketplace de plantillas públicas.
+description: Biblioteca de plantillas de consultoría de R-C-T-E-E Pro. Úsala al construir el catálogo de plantillas, al implementar el flujo de selección y uso, o al agregar plantillas nuevas a los 7 verticales. Las plantillas son el producto core — no son "templates de chatbot", son metodologías de consultoría empaquetadas.
 ---
 
 # Solution Templates Library
 
-Las plantillas son proyectos "congelados" que otros usuarios pueden clonar como punto de partida. Cada plantilla incluye configuración de agentes, estructura del proyecto, integraciones y ajustes preconfigurados.
+Las plantillas son el corazón del producto. Cada plantilla = una metodología de consultoría senior empaquetada en un formulario + prompt R-C-T-E-E + generador de documentos profesionales.
 
 ---
 
-## Modelo de datos
+## Catálogo actual (60+ plantillas en 7 verticales)
+
+### 💰 Reintegra AI — Financiero / Cobranza
+| Plantilla | Output | Precio sugerido |
+|---|---|---|
+| Diagnóstico Financiero Express | PDF 30 pág | $4,500 USD |
+| Plan de Cobranza Completo | Word + templates | $6,000 USD |
+| Análisis de Cartera Vencida | Excel + PDF | $3,500 USD |
+
+### 🧘 Kineticorp Bienestar — RRHH
+| Plantilla | Output | Precio sugerido |
+|---|---|---|
+| Programa Bienestar Laboral 12 Meses | PDF + Excel calendario | $15,000 USD |
+| Diagnóstico de Clima Organizacional | PDF 20 pág | $5,000 USD |
+| Plan de Reducción de Rotación | PDF + plan de acción | $8,000 USD |
+
+*(y más en los otros 5 verticales)*
+
+---
+
+## Estructura en DB
 
 ```typescript
-// Tabla: templates
-{
-  id: uuid,
-  organization_id: uuid | null,   // null = plantilla de la plataforma
-  created_by: uuid,               // usuario que la creó
-  name: string,
-  description: text,
-  category: TemplateCategory,
-  thumbnail_url: string,
-  is_public: boolean,             // visible en marketplace
-  is_featured: boolean,           // destacada por la plataforma
-  use_count: integer,             // cuántas veces fue clonada
-  tags: text[],
-  snapshot: jsonb,                // snapshot del proyecto (ver abajo)
-  required_plan: PlanTier,        // plan mínimo para usar esta plantilla
-  price_cents: integer,           // 0 = gratis, >0 = de pago (marketplace futuro)
-  created_at, updated_at
+// Ver rcte-methodology skill para el schema completo de la tabla templates
+// Campos clave adicionales para la biblioteca:
+
+interface TemplateCard {
+  id: uuid;
+  vertical: Vertical;
+  name: string;
+  description: string;        // Qué problema resuelve (lenguaje de la pyme)
+  value_proposition: string;  // "Recupera $80K de cartera vencida en 90 días"
+  output_format: OutputFormat;
+  output_pages_approx: number;
+  price_usd: number;          // Precio sugerido al cliente final
+  duration_days: number;      // Días típicos de implementación
+  required_plan: PlanTier;
+  tags: string[];             // ["cobranza", "financiero", "pymes", "retail"]
+  preview_pdf_url: string;    // PDF de muestra (primeras 3 páginas)
+  is_featured: boolean;
+  is_active: boolean;
 }
 ```
 
 ---
 
-## Categorías de plantillas (`TemplateCategory`)
+## MVP: Las 3 plantillas que deben funcionar perfectamente
 
-```typescript
-type TemplateCategory =
-  | "chatbot"           // atención al cliente, FAQ
-  | "sales"             // CRM ligero, seguimiento de leads
-  | "automation"        // flujos automáticos de tareas
-  | "collections"       // cobranza y seguimiento de pagos
-  | "events"            // registro y gestión de eventos
-  | "onboarding"        // bienvenida y activación de clientes
-  | "analytics"         // reportes y métricas
-  | "custom"            // categoría personalizada por el usuario
+Antes de lanzar cualquier otra cosa, estas 3 deben generar documentos impecables:
+
+### Plantilla 1: Diagnóstico Financiero Express
+```
+Vertical: Reintegra AI
+Output: PDF ~30 páginas con portada de marca, índice, análisis, semáforo de colores
+Formulario: 7 campos (ver rcte-methodology skill)
+Precio: $4,500 USD
+Tiempo generación: ~90s
+Estado: ✅ Ya existe en el código — empaquetar como entregable
+```
+
+### Plantilla 2: Plan de Cobranza Completo
+```
+Vertical: Reintegra AI
+Output: Documento Word (.docx) + 5 templates de mensajes WhatsApp/email
+Formulario: 6 campos (empresa, cartera por tramos, sector, tamaño)
+Precio: $6,000 USD
+Tiempo generación: ~60s
+Estado: ✅ Ya existe — migrar al nuevo pipeline
+```
+
+### Plantilla 3: Programa Bienestar Laboral 12 Meses
+```
+Vertical: Kineticorp Bienestar
+Output: PDF programa (~20 pág) + archivo Excel con calendario y presupuesto
+Formulario: 8 campos (empresa, empleados, problema principal, presupuesto disponible)
+Precio: $15,000 USD
+Tiempo generación: ~75s
+Estado: ✅ Ya existe — migrar al nuevo pipeline
 ```
 
 ---
 
-## Snapshot de un proyecto (estructura del `jsonb`)
+## Flujo de uso de una plantilla (UX no-code)
+
+```
+1. Usuario abre panel → ve galería de plantillas organizadas por vertical
+2. Filtra por vertical (ej: "Financiero") o por tipo de problema
+3. Selecciona plantilla → ve: descripción, entregable, precio sugerido, muestra PDF
+4. Clic "Usar plantilla" → formulario guiado paso a paso
+5. Completa campos con datos de su cliente pyme (con ejemplos en cada campo)
+6. Clic "Generar documento" → barra de progreso (30-90s)
+7. Documento listo → descarga PDF/Word/Excel
+8. (Opcional) Comparte directamente con el cliente desde la plataforma
+```
+
+---
+
+## Filtros de la galería
 
 ```typescript
-interface ProjectSnapshot {
-  version: "1.0",
-  project: {
-    name: string,
-    description: string,
-    settings: Record<string, unknown>,
-  },
-  agents: Array<{
-    name: string,
-    type: AgentType,
-    model: string,
-    system_prompt: string,
-    temperature: number,
-    tools_enabled: AgentTool[],
-  }>,
-  integrations: Array<{
-    type: string,
-    config: Record<string, unknown>, // sin credentials — solo estructura
-  }>,
-  pages?: Array<{   // para soluciones con UI pública
-    slug: string,
-    title: string,
-    layout: string,
-  }>,
+// GET /api/templates?vertical=reintegra_ai&plan_ok=true&search=cobranza
+interface TemplateFilters {
+  vertical?: Vertical;
+  output_format?: OutputFormat;
+  max_price?: number;
+  search?: string;          // busca en name, description, tags
+  plan_ok?: boolean;        // solo mostrar las accesibles por el plan del usuario
+  is_featured?: boolean;
 }
 ```
 
-**Nunca incluir en el snapshot:** API keys, tokens, datos de clientes, mensajes de conversaciones.
-
 ---
 
-## Flujo: exportar proyecto como plantilla
+## Previsualización (preview PDF)
+
+Cada plantilla tiene un PDF de muestra con las primeras 3 páginas del entregable real (datos de ejemplo). Esto es clave para la conversión — el usuario ve exactamente qué va a recibir.
 
 ```
-1. Usuario clic "Guardar como plantilla"
-2. Sistema genera snapshot del proyecto (sanitizado — sin credenciales)
-3. Usuario completa: nombre, descripción, categoría, thumbnail, visibilidad
-4. Sistema guarda en tabla `templates`
-5. Si is_public=true y plan free → mostrar error (solo Starter/Pro pueden publicar)
-```
-
----
-
-## Flujo: clonar una plantilla
-
-```
-1. Usuario selecciona plantilla del catálogo
-2. Sistema verifica: ¿el plan del usuario cubre `required_plan` de la plantilla?
-3. Sistema verifica: ¿el usuario tiene cupo para un proyecto más? (freemium-gates)
-4. Crear nuevo proyecto en la org del usuario
-5. Crear agentes, integraciones y configuraciones desde el snapshot
-6. Incrementar `use_count` en la plantilla original
-7. Redirigir al nuevo proyecto
+Almacenamiento: Supabase Storage en bucket "template-previews"
+Formato: PDF, máx 2MB
+URL: public (sin auth — sirven para marketing también)
+Generar manualmente para cada plantilla nueva
 ```
 
 ---
 
-## Endpoints
+## Acceso por plan
+
+| Plan | Plantillas disponibles |
+|---|---|
+| Free | 3 plantillas básicas (1 por vertical core), 2 usos/mes |
+| Starter | Todas las plantillas de 1 vertical elegido, 10 usos/mes |
+| Pro | Todos los verticales (60+), usos ilimitados |
+| Agencia | Todo + white label, sin marca de la plataforma en los docs |
+
+---
+
+## Agregar una plantilla nueva (checklist)
+
+- [ ] Definir los 5 componentes R-C-T-E-E (ver `rcte-methodology` skill)
+- [ ] Crear los `form_fields` con placeholders claros y ejemplos reales
+- [ ] Definir `required_sections` para validar el output
+- [ ] Generar 5 documentos de prueba con datos reales y validar calidad
+- [ ] Crear el PDF de preview (3 páginas, datos de ejemplo)
+- [ ] Definir `price_usd` y `required_plan`
+- [ ] Subir a Supabase y activar (`is_active: true`)
+- [ ] Agregar a la galería con `value_proposition` clara
+
+---
+
+## Nomenclatura de archivos generados
 
 ```
-GET  /api/templates                → listar plantillas (filtros: category, is_public, tags)
-GET  /api/templates/:id            → detalle de plantilla
-POST /api/templates                → crear plantilla desde proyecto
-POST /api/templates/:id/clone      → clonar plantilla al workspace del usuario
-PUT  /api/templates/:id            → actualizar plantilla propia
-DELETE /api/templates/:id          → archivar plantilla propia
-GET  /api/templates/featured       → plantillas destacadas (para home del marketplace)
+{vertical}_{template_slug}_{organization_id}_{timestamp}.pdf
+// Ejemplo: reintegra_ai_diagnostico_financiero_abc123_20240115.pdf
+
+Almacenamiento: Supabase Storage, bucket "deliverables"
+Acceso: firmado (URL con expiración de 7 días), nunca público permanente
 ```
 
 ---
 
 ## Reglas clave
 
-- Las plantillas de la plataforma tienen `organization_id = null` y solo el sistema las puede crear/editar
-- Un usuario en plan Free puede usar plantillas públicas pero NO publicar las suyas
-- Al clonar, los agentes se crean con `is_active = false` hasta que el usuario configure sus credenciales
-- El `system_prompt` de los agentes se clona tal cual — el usuario puede editarlo después
-- Las plantillas con `price_cents > 0` son para el marketplace de pago (fase futura) — reservar el campo desde ahora
-
----
-
-## Plantillas de la plataforma (seed inicial)
-
-Crear estas plantillas base al hacer el seed de la DB:
-
-| Nombre | Categoría | Descripción |
-|---|---|---|
-| Chatbot de Soporte | chatbot | Atiende preguntas frecuentes con IA |
-| Seguimiento de Cobranza | collections | Recordatorios automáticos de pagos pendientes |
-| Registro de Eventos | events | Formulario + confirmación por email |
-| Calificación de Leads | sales | Chatbot que califica y agenda demos |
-| Onboarding de Clientes | onboarding | Flujo de bienvenida paso a paso |
+- Los prompts R-C-T-E-E son IP de la plataforma — **nunca exponer en la UI ni en el API response**
+- El PDF de preview sí es público — úsalo en marketing y landing page
+- Guardar el `generated_content` (texto crudo de la IA) además del PDF — permite regenerar el formato sin re-llamar a la IA
+- Las plantillas "premium" tienen `required_plan: "pro"` — no desbloquear por error
+- El nombre del archivo incluye `organization_id` para garantizar aislamiento de datos en storage
 
 ---
 
 ## Referencias
 
-- Ver `platform-architecture` skill para estructura de datos completa
-- Ver `freemium-gates` skill para restricciones por plan
-- Ver `ai-agent-config` skill para el formato de los agentes en el snapshot
+- Ver `rcte-methodology` skill para el schema de prompts y la implementación del builder
+- Ver `ai-agent-config` skill para el pipeline de generación
+- Ver `freemium-gates` skill para los límites de acceso por plan
+- Ver `platform-architecture` skill para el stack y los verticales

@@ -1,195 +1,242 @@
 ---
 name: pyme-crm
-description: CRM ligero para gestión de clientes finales dentro de la plataforma. Úsala al construir el módulo de CRM, al conectar clientes a proyectos/soluciones, o al implementar seguimiento de interacciones para pymes.
+description: CRM de clientes de R-C-T-E-E Pro — gestión de las pymes que contratan servicios de consultoría. Úsala al construir el módulo de clientes, al rastrear proyectos y entregables por cliente, o al implementar seguimiento del pipeline de ventas. El "cliente" aquí es la pyme compradora, no el usuario final del chatbot.
 ---
 
-# Pyme CRM
+# Pyme CRM — R-C-T-E-E Pro
 
-CRM orientado a pymes: simple, rápido y conectado a los agentes IA de la plataforma. El objetivo es que el usuario de la plataforma pueda gestionar a sus propios clientes finales y que los agentes puedan consultar y actualizar estos datos.
+El CRM registra las **pymes clientes** que contratan los servicios del consultor/agencia que usa la plataforma. No es un CRM de atención al cliente masivo — es una agenda de proyectos de consultoría con historial de entregables y pagos.
 
 ---
 
 ## Modelo de datos
 
 ```typescript
-// Tabla: clients
+// Tabla: clients (pymes que contratan consultoría)
 {
   id: uuid,
-  organization_id: uuid,
-  name: string,
-  email: string | null,
-  phone: string | null,               // formato E.164 (+5491112345678)
-  company: string | null,
-  tags: text[],                       // etiquetas libres (ej: ["lead", "vip", "deudor"])
+  organization_id: uuid,          // consultor/agencia dueño de este cliente
+  company_name: string,
+  industry: Industry,             // sector de la pyme
+  company_size: CompanySize,      // "50-100" | "100-250" | "250-500"
+  contact_name: string,           // nombre del dueño/gerente
+  contact_email: string,
+  contact_phone: string,          // formato colombiano: +57 300 XXX XXXX
+  contact_whatsapp: string | null,
+  city: string,                   // Bogotá, Medellín, Cali, etc.
   status: ClientStatus,
-  assigned_to: uuid | null,           // miembro del equipo responsable
-  source: string | null,              // de dónde llegó ("chatbot", "formulario", "manual")
-  custom_fields: jsonb,               // campos personalizados por la org
+  pipeline_stage: PipelineStage,
+  total_billed_usd: decimal,      // suma de todos los proyectos
   notes: text | null,
-  last_contacted_at: timestamp | null,
+  source: string | null,          // "linkedin", "referido", "landing", "evento"
+  assigned_to: uuid | null,
   created_at, updated_at
 }
 
-type ClientStatus =
-  | "lead"          // posible cliente, no confirmado
-  | "active"        // cliente activo
-  | "inactive"      // sin actividad reciente
-  | "at_risk"       // señales de churn
-  | "lost"          // perdido / canceló
+type Industry =
+  | "retail" | "manufactura" | "servicios" | "tecnologia"
+  | "construccion" | "salud" | "educacion" | "agro" | "otro"
 
-// Tabla: client_interactions (historial de contacto)
+type CompanySize = "50-100" | "100-250" | "250-500"
+
+type ClientStatus = "prospect" | "active" | "completed" | "paused" | "lost"
+
+type PipelineStage =
+  | "lead"              // contacto inicial
+  | "diagnostico"       // llamada de diagnóstico agendada/realizada
+  | "propuesta"         // propuesta enviada
+  | "negociacion"       // en negociación de precio/alcance
+  | "anticipo"          // pago de anticipo recibido
+  | "en_ejecucion"      // proyecto en curso
+  | "entregado"         // entregables entregados
+  | "completado"        // pago final recibido, proyecto cerrado
+```
+
+---
+
+## Proyectos por cliente
+
+```typescript
+// Tabla: client_projects
 {
   id: uuid,
   organization_id: uuid,
   client_id: uuid,
-  type: InteractionType,
-  summary: text,                      // resumen del contacto
-  agent_id: uuid | null,              // si fue generado por un agente IA
-  created_by: uuid | null,            // si fue creado manualmente por un usuario
-  metadata: jsonb,                    // datos adicionales (ej: monto cobrado, evento asistido)
-  created_at: timestamp,
+  name: string,                   // "Diagnóstico Financiero - Q1 2024"
+  vertical: Vertical,             // qué empresa/marca de la plataforma se usó
+  status: ProjectStatus,
+  start_date: date,
+  delivery_date: date | null,
+  price_usd: decimal,
+  payment_status: PaymentStatus,
+  advance_paid_usd: decimal,      // anticipo recibido
+  balance_due_usd: decimal,       // saldo pendiente (computed)
+  notes: text | null,
+  created_at, updated_at
 }
 
-type InteractionType =
-  | "chat"          // conversación con agente IA
-  | "email"         // email enviado
-  | "call"          // llamada registrada
-  | "note"          // nota manual
-  | "payment"       // pago registrado
-  | "event"         // asistencia a evento
-  | "form"          // formulario completado
+type ProjectStatus = "pending" | "in_progress" | "delivered" | "completed" | "canceled"
+type PaymentStatus = "pending" | "advance_received" | "fully_paid" | "overdue"
 ```
+
+---
+
+## Entregables por proyecto
+
+```typescript
+// Tabla: deliverables (documentos generados para cada proyecto)
+{
+  id: uuid,
+  organization_id: uuid,
+  project_id: uuid,
+  client_id: uuid,
+  template_id: uuid,              // qué plantilla R-C-T-E-E se usó
+  template_name: string,          // copia del nombre (por si se edita la plantilla)
+  inputs: jsonb,                  // datos del formulario que generó este doc
+  generated_content: text | null, // texto crudo de la IA (para regenerar formato)
+  file_url: string | null,        // URL firmada en Supabase Storage
+  file_format: "pdf" | "word" | "excel",
+  file_size_bytes: integer | null,
+  generation_status: "queued" | "processing" | "completed" | "failed",
+  generation_attempts: integer,
+  shared_with_client: boolean,    // si se envió el link al cliente
+  shared_at: timestamp | null,
+  created_at, updated_at
+}
+```
+
+---
+
+## Pipeline de ventas (vista Kanban sugerida)
+
+```
+Lead → Diagnóstico → Propuesta → Anticipo → En Ejecución → Entregado → Completado
+```
+
+Cada columna muestra: nombre de la empresa, vertical, monto del proyecto, fecha estimada.
 
 ---
 
 ## Endpoints
 
 ```
-GET    /api/clients                     → listar clientes (filtros: status, tags, assigned_to, search)
-GET    /api/clients/:id                 → detalle del cliente + historial de interacciones
-POST   /api/clients                     → crear cliente
-PUT    /api/clients/:id                 → actualizar cliente
-DELETE /api/clients/:id                 → archivar cliente
-POST   /api/clients/:id/interactions    → registrar interacción manual
-GET    /api/clients/export              → exportar a CSV (Starter/Pro)
-POST   /api/clients/import              → importar desde CSV (Starter/Pro)
+GET    /api/clients                       → lista con filtros (status, pipeline_stage, industry)
+GET    /api/clients/:id                   → detalle + proyectos + entregables + pagos
+POST   /api/clients                       → crear cliente
+PUT    /api/clients/:id                   → actualizar
+POST   /api/clients/:id/projects          → crear proyecto para el cliente
+GET    /api/clients/:id/projects          → proyectos del cliente
+POST   /api/projects/:id/deliverables     → generar entregable (dispara job de IA)
+GET    /api/projects/:id/deliverables     → listar entregables
+POST   /api/deliverables/:id/share        → generar link de descarga para el cliente
+GET    /api/pipeline                      → vista Kanban de todos los proyectos activos
+GET    /api/crm/summary                   → métricas resumen (ingresos, proyectos activos, etc.)
 ```
 
 ---
 
-## Integración con agentes IA
+## Compartir entregable con el cliente
 
-Los agentes con la tool `query_crm` pueden leer y escribir en el CRM:
-
-```typescript
-// Tool: query_crm
-// El agente puede hacer:
-// - Buscar clientes por email, teléfono o nombre
-// - Ver el historial de interacciones de un cliente
-// - Crear un cliente nuevo (cuando el chatbot captura un lead)
-// - Registrar una interacción
-// - Actualizar el status de un cliente
-
-// Siempre scoped a organization_id del proyecto — nunca acceso cross-tenant
-```
-
-Cuando un agente crea un cliente nuevo (ej: un lead capturado por chatbot), registrar:
-- `source = "chatbot"`
-- `agent_id` en la interacción
-- `status = "lead"`
-
----
-
-## Campos personalizados (`custom_fields`)
-
-Cada organización puede definir sus propios campos:
+Cuando el consultor termina un entregable, puede enviarlo al cliente pyme directamente:
 
 ```typescript
-// Tabla: client_field_definitions
-{
-  id: uuid,
-  organization_id: uuid,
-  field_key: string,          // "fecha_vencimiento", "monto_deuda"
-  field_label: string,        // "Fecha de vencimiento"
-  field_type: "text" | "number" | "date" | "boolean" | "select",
-  options: string[] | null,   // para tipo "select"
-  is_required: boolean,
+// POST /api/deliverables/:id/share
+// Genera URL firmada de Supabase con expiración de 30 días
+// Envía WhatsApp/email al cliente con el link
+
+async function shareDeliverable(deliverableId: string, orgId: string) {
+  const deliverable = await getDeliverable(deliverableId, orgId);
+  const signedUrl = await supabase.storage
+    .from("deliverables")
+    .createSignedUrl(deliverable.storagePath, 60 * 60 * 24 * 30); // 30 días
+
+  // Enviar por WhatsApp si tiene número configurado
+  await sendWhatsAppMessage(deliverable.client.whatsapp, {
+    type: "document",
+    url: signedUrl,
+    filename: deliverable.filename,
+    caption: `Aquí está su ${deliverable.templateName}. Cualquier pregunta, con gusto.`,
+  });
+
+  await db.update(deliverables).set({
+    sharedWithClient: true,
+    sharedAt: new Date(),
+  }).where(eq(deliverables.id, deliverableId));
 }
 ```
 
-Los valores se guardan en `clients.custom_fields` como jsonb: `{ "fecha_vencimiento": "2024-03-01" }`.
-
 ---
 
-## Segmentación y filtros
+## Métricas de negocio del consultor
 
-Filtros disponibles en la lista de clientes:
-- `status` — lead / active / inactive / at_risk / lost
-- `tags` — filtro por etiqueta (AND o OR)
-- `assigned_to` — por miembro del equipo
-- `search` — búsqueda por nombre, email, teléfono, empresa
-- `source` — de dónde proviene el cliente
-- `last_contacted_before` — para encontrar clientes sin contacto reciente
-- `created_after` / `created_before`
-
----
-
-## Cobranza (caso de uso pyme frecuente)
-
-Para pymes que usan la plataforma para cobranza, los campos clave son:
-- `status: "at_risk"` → clientes con pagos vencidos
-- `custom_fields.monto_deuda` → deuda pendiente
-- `interactions` con `type: "payment"` → historial de pagos
-- Agente con `type: "collector"` → automatiza recordatorios
-
-Flujo típico:
-```
-1. Importar deudores desde CSV
-2. Agente "collector" envía WhatsApp/email con recordatorio
-3. Registrar interacción con resultado
-4. Si el cliente paga → registrar interaction type "payment" + actualizar status
+```typescript
+// GET /api/crm/summary
+interface CRMSummary {
+  revenue: {
+    total_billed_usd: number;       // total facturado histórico
+    collected_usd: number;          // efectivamente cobrado
+    pending_usd: number;            // por cobrar (saldo)
+    this_month_usd: number;         // facturado este mes
+  };
+  pipeline: {
+    active_projects: number;
+    projects_by_stage: Record<PipelineStage, number>;
+    avg_deal_size_usd: number;
+  };
+  deliverables: {
+    total_generated: number;
+    by_vertical: Record<Vertical, number>;
+    this_month: number;
+  };
+  clients: {
+    total: number;
+    active: number;
+    new_this_month: number;
+  };
+}
 ```
 
 ---
 
 ## Límites por plan
 
-| Plan | Clientes en CRM | Exportación CSV | Campos personalizados |
+| Plan | Clientes | Proyectos activos | Entregables/mes |
 |---|---|---|---|
-| Free | 50 | No | 0 |
-| Starter | 500 | Sí | 5 |
-| Pro | Ilimitados | Sí | Ilimitados |
+| Free | 5 | 2 | 2 |
+| Starter | 50 | 10 | 10 |
+| Pro | Ilimitados | Ilimitados | Ilimitados |
+| Agencia | Ilimitados | Ilimitados | Ilimitados |
+
+---
+
+## WhatsApp como canal primario (Colombia)
+
+WhatsApp es el canal de comunicación dominante en Colombia. Integrar envío de entregables vía WhatsApp Business API (Meta) desde el primer release:
+
+```
+Casos de uso:
+- Enviar PDF/Word al cliente cuando el entregable está listo
+- Recordatorios de pago de anticipo o saldo
+- Notificación de inicio de proyecto
+```
+
+Ver `integration-connectors` skill para implementación de WhatsApp Cloud API.
 
 ---
 
 ## Reglas clave
 
-- Los clientes del CRM son de la organización, no del usuario individual — toda la org puede verlos
-- `last_contacted_at` se actualiza automáticamente al registrar cualquier interacción
-- Al archivar un cliente, no borrar — cambiar `status = "lost"` y ocultar de la lista por defecto
-- Los teléfonos se guardan en formato E.164 para compatibilidad con WhatsApp API
-- La búsqueda full-text debe indexar `name`, `email`, `company` (índice GIN en PostgreSQL)
-
----
-
-## Índices recomendados
-
-```sql
--- Búsqueda full-text
-CREATE INDEX idx_clients_search ON clients
-  USING GIN(to_tsvector('spanish', name || ' ' || COALESCE(email, '') || ' ' || COALESCE(company, '')));
-
--- Filtros frecuentes
-CREATE INDEX idx_clients_org_status ON clients(organization_id, status);
-CREATE INDEX idx_clients_org_tags ON clients USING GIN(organization_id, tags);
-```
+- El campo `total_billed_usd` se actualiza automáticamente al crear/completar proyectos
+- `balance_due_usd = price_usd - advance_paid_usd` — computado en el modelo, no en la DB
+- Al compartir un entregable, guardar `shared_at` para saber si el cliente ya lo recibió
+- Los archivos en Supabase Storage usan paths con `organization_id` para aislamiento
+- El teléfono se guarda en formato E.164 (+57 300...) para WhatsApp API
 
 ---
 
 ## Referencias
 
-- Ver `platform-architecture` skill para estructura de datos completa
-- Ver `multi-tenancy` skill para aislamiento por organización
-- Ver `ai-agent-config` skill para la tool `query_crm`
+- Ver `platform-architecture` skill para los 7 verticales
+- Ver `solution-templates-lib` skill para la relación plantilla → entregable
+- Ver `integration-connectors` skill para WhatsApp y envío de documentos
 - Ver `freemium-gates` skill para límites por plan
-- Ver `integration-connectors` skill para WhatsApp/email desde el CRM
