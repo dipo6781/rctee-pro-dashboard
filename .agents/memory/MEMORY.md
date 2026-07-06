@@ -1,0 +1,1 @@
+- [AI Platform Skills Map](platform-skills-map.md) — 9 skills creados para plataforma AI freemium de soluciones para pymes; stack recomendado y módulos definidos.
